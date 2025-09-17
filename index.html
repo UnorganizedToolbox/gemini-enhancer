@@ -76,7 +76,6 @@
         const errorBox = document.getElementById('error-box');
         const errorMessage = document.getElementById('error-message');
         
-        const apiKey = ""; 
         let chatHistory = [];
         let latestModelResponse = "";
 
@@ -158,36 +157,6 @@
             const indicator = document.getElementById('typing-indicator');
             if (indicator) indicator.remove();
         }
-
-        async function callApi(apiUrl, payload) {
-             let response;
-            let delay = 1000;
-            for (let i = 0; i < 5; i++) {
-                try {
-                    response = await fetch(apiUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-                    if (response.ok) {
-                        return await response.json();
-                    } else if (response.status === 429) {
-                         console.warn(`API rate limit hit. Retrying in ${delay}ms...`);
-                         await new Promise(resolve => setTimeout(resolve, delay));
-                         delay *= 2;
-                    } else {
-                        const errorData = await response.json();
-                        throw new Error(`API error (${response.status}): ${errorData.error?.message || 'Unknown API error'}`);
-                    }
-                } catch (error) {
-                    if (i === 4) throw error;
-                    console.warn(`Fetch error. Retrying in ${delay}ms...`, error);
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                    delay *= 2;
-                }
-            }
-        }
-
         async function generateTextFromApi() {
             const systemPrompt = `あなたは優秀なテクニカルライターで、ユーザーと対話しながら解説記事を作成します。
 
@@ -202,23 +171,28 @@
 - **Mermaidの注意点**: ノードのテキストに括弧 \`()\` やコロン \`:\` などの特殊文字が含まれる場合は、必ずテキスト全体をダブルクォーテーション \`""\` で囲んでください。例: \`A["天然ガス (CH4)"] --> B["N2: 精製"]\`
 - 以前の会話内容を記憶し、文脈に沿った応答をしてください。
 - **参考文献**: 解説の最後には必ず「## 参考文献」というセクションを設け、参考にした情報源をリストアップしてください。各文献にはURLも記載してください。本文中では、関連する記述の直後に \`[1]\`, \`[2]\` のように引用番号を付与してください。`;
-
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-            const payload = {
-                contents: chatHistory,
-                systemInstruction: { parts: [{ text: systemPrompt }] },
-            };
-
-            const result = await callApi(apiUrl, payload);
-            const candidate = result.candidates?.[0];
-
-            if (candidate && candidate.content?.parts?.[0]?.text) {
-                return candidate.content.parts[0].text;
-            } else {
-                 console.error("API response error:", JSON.stringify(result));
-                throw new Error("APIからの応答が予期した形式ではありません。");
-            }
+            // 自作のバックエンドAPI (/api/generate) を呼び出す
+            const response = await fetch('/api/generate', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                // 会話履歴とシステムプロンプトをバックエンドに送る
+                body: JSON.stringify({ 
+                    chatHistory: chatHistory,
+                    systemPrompt: systemPrompt 
+                }),
+            });
         }
+
+  if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || `サーバーエラー (${response.status})`);
+  }
+
+  const data = await response.json();
+  return data.text; // バックエンドから返ってきたテキストを返す
+}
 
         function replaceCitationsWithLinks(element, refCount) {
             const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null, false);
@@ -406,5 +380,6 @@
     </script>
 </body>
 </html>
+
 
 
