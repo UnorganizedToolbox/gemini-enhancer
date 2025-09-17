@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini 高機能解説ジェネレーター</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" xintegrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" xintegrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG+vnGctmUb0ZY0l8" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" xintegrity="sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" xintegrity="sha512-BNaRQnYJYiPSqHHDb58B0yaPfCu+Wgds8Gp/gU33kqBtgNS4tSPHuGibyoVBL5gI9kLmbG4dGdGmkSFoPAccJg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" xintegrity="sha512-qZvrmS2ekKPF2mSznTQsxqPgnpkI4DNTlrdUmTzrDgektczlKNRRhy5X5AAOnx5S09ydFYWWNSfcEqDTTHgtNA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .prose h1 { font-size: 1.875rem; }
+        .prose h2 { font-size: 1.5rem; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.5rem; margin-top: 1.5rem;}
+        .prose h3 { font-size: 1.25rem; }
+        .prose p, .prose ul, .prose ol { line-height: 1.75; }
+        .prose pre { background-color: #f3f4f6; padding: 1rem; border-radius: 0.5rem; }
+        #chat-history { scroll-behavior: smooth; }
+    </style>
+</head>
+<body class="bg-gray-100 h-screen flex flex-col">
+
+    <header class="bg-white shadow-sm w-full">
+        <div class="container mx-auto p-4 max-w-5xl text-center">
+             <h1 class="text-2xl md:text-3xl font-bold text-gray-900">高機能解説ジェネレーター</h1>
+             <p class="text-gray-500 text-sm mt-1">AIとの対話で、Markdown・図(Mermaid)・数式(LaTeX)を含む解説記事を生成</p>
+        </div>
+    </header>
+
+    <main class="flex-1 container mx-auto p-4 max-w-5xl flex flex-col overflow-hidden">
+        <div id="chat-history" class="flex-1 space-y-4 overflow-y-auto p-4 bg-white rounded-t-lg shadow-inner">
+            <!-- Chat messages will be appended here -->
+             <div class="p-4 bg-blue-50 rounded-lg text-gray-700">
+                <p class="font-semibold">アシスタント</p>
+                <p>こんにちは！どのような解説記事を作成しますか？</p>
+            </div>
+        </div>
+        
+        <div id="chat-input-area" class="p-4 bg-white border-t border-gray-200 rounded-b-lg">
+             <div id="error-box" class="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative hidden" role="alert">
+                <strong class="font-bold">エラー:</strong>
+                <span class="block sm:inline" id="error-message"></span>
+            </div>
+            <div class="flex items-center space-x-3">
+                <textarea id="prompt" rows="1" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition resize-none" placeholder="メッセージを入力..."></textarea>
+                <button id="generate-btn" class="bg-blue-600 text-white font-bold py-3 px-5 rounded-lg hover:bg-blue-700 transition-all duration-300 ease-in-out flex items-center justify-center disabled:bg-gray-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const generateBtn = document.getElementById('generate-btn');
+        const promptTextarea = document.getElementById('prompt');
+        const chatHistoryDiv = document.getElementById('chat-history');
+        const errorBox = document.getElementById('error-box');
+        const errorMessage = document.getElementById('error-message');
+        
+        const apiKey = ""; 
+        let chatHistory = [];
+        let latestModelResponse = "";
+
+        mermaid.initialize({ startOnLoad: false, theme: 'default' });
+
+        promptTextarea.addEventListener('input', () => {
+            promptTextarea.style.height = 'auto';
+            promptTextarea.style.height = (promptTextarea.scrollHeight) + 'px';
+        });
+
+        promptTextarea.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                generateContent();
+            }
+        });
+
+        generateBtn.addEventListener('click', generateContent);
+
+        async function generateContent() {
+            const userPrompt = promptTextarea.value;
+            if (!userPrompt.trim()) return;
+
+            addMessageToHistory('user', userPrompt);
+            promptTextarea.value = '';
+            promptTextarea.style.height = 'auto';
+
+            generateBtn.disabled = true;
+            addTypingIndicator();
+
+            try {
+                const markdownText = await generateTextFromApi();
+                latestModelResponse = markdownText;
+                removeTypingIndicator();
+                addMessageToHistory('model', markdownText);
+
+            } catch (error) {
+                console.error('Error:', error);
+                showError(error.message || '不明なエラーが発生しました。');
+                removeTypingIndicator();
+            } finally {
+                generateBtn.disabled = false;
+            }
+        }
+
+        function addMessageToHistory(role, content) {
+            const messageWrapper = document.createElement('div');
+            
+            if (role === 'user') {
+                messageWrapper.className = "p-4 bg-gray-100 rounded-lg ml-auto max-w-4/5";
+                messageWrapper.innerHTML = `<p class="font-semibold text-right">あなた</p><p class="whitespace-pre-wrap">${content.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>`;
+                chatHistory.push({ role: "user", parts: [{ text: content }] });
+            } else { // model
+                messageWrapper.id = `model-response-${chatHistory.length}`;
+                messageWrapper.className = "p-4 bg-blue-50 rounded-lg text-gray-700";
+                const exportButtons = `
+                    <div class="export-buttons flex items-center gap-2 mt-3 border-t pt-2">
+                        <button onclick="copyToClipboard('${messageWrapper.id}')" class="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded">Markdownコピー</button>
+                        <button onclick="exportPdf('${messageWrapper.id}')" class="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded">PDFエクスポート</button>
+                    </div>`;
+                messageWrapper.innerHTML = `<p class="font-semibold">アシスタント</p><div class="prose max-w-none model-content">${content}</div>${exportButtons}`;
+                chatHistory.push({ role: "model", parts: [{ text: content }] });
+                renderContent(messageWrapper.querySelector('.model-content'));
+            }
+            chatHistoryDiv.appendChild(messageWrapper);
+            chatHistoryDiv.scrollTop = chatHistoryDiv.scrollHeight;
+        }
+
+        function addTypingIndicator() {
+            const typingIndicator = document.createElement('div');
+            typingIndicator.id = "typing-indicator";
+            typingIndicator.className = "p-4 bg-blue-50 rounded-lg text-gray-700 flex items-center space-x-2";
+            typingIndicator.innerHTML = `<p class="font-semibold">アシスタント</p><div class="loader"></div>`;
+            chatHistoryDiv.appendChild(typingIndicator);
+            chatHistoryDiv.scrollTop = chatHistoryDiv.scrollHeight;
+        }
+
+        function removeTypingIndicator() {
+            const indicator = document.getElementById('typing-indicator');
+            if (indicator) indicator.remove();
+        }
+
+        async function callApi(apiUrl, payload) {
+             let response;
+            let delay = 1000;
+            for (let i = 0; i < 5; i++) {
+                try {
+                    response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (response.ok) {
+                        return await response.json();
+                    } else if (response.status === 429) {
+                         console.warn(`API rate limit hit. Retrying in ${delay}ms...`);
+                         await new Promise(resolve => setTimeout(resolve, delay));
+                         delay *= 2;
+                    } else {
+                        const errorData = await response.json();
+                        throw new Error(`API error (${response.status}): ${errorData.error?.message || 'Unknown API error'}`);
+                    }
+                } catch (error) {
+                    if (i === 4) throw error;
+                    console.warn(`Fetch error. Retrying in ${delay}ms...`, error);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay *= 2;
+                }
+            }
+        }
+
+        async function generateTextFromApi() {
+            const systemPrompt = `あなたは優秀なテクニカルライターで、ユーザーと対話しながら解説記事を作成します。
+
+# 利用可能なツール
+1.  **Markdown**: 構造化された文章を作成します。
+2.  **Mermaid**: \`\`\`mermaid コードブロックで図を作成します。フローチャート、シーケンス図などが利用可能です。
+3.  **LaTeX**: \`$...\` や \`$$...\` で数式を表現します。
+
+# 指示
+- ユーザーの要求に応じて、これらのツールを適切に組み合わせ、プロフェッショナルな解説を生成してください。
+- 特に、ハーバー・ボッシュ法のような化学プロセスや、システムのワークフローを説明する場合は、Mermaidを積極的に使い、フローチャートとして視覚的に表現してください。
+- **Mermaidの注意点**: ノードのテキストに括弧 \`()\` やコロン \`:\` などの特殊文字が含まれる場合は、必ずテキスト全体をダブルクォーテーション \`""\` で囲んでください。例: \`A["天然ガス (CH4)"] --> B["N2: 精製"]\`
+- 以前の会話内容を記憶し、文脈に沿った応答をしてください。
+- **参考文献**: 解説の最後には必ず「## 参考文献」というセクションを設け、参考にした情報源をリストアップしてください。各文献にはURLも記載してください。本文中では、関連する記述の直後に \`[1]\`, \`[2]\` のように引用番号を付与してください。`;
+
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+            const payload = {
+                contents: chatHistory,
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+            };
+
+            const result = await callApi(apiUrl, payload);
+            const candidate = result.candidates?.[0];
+
+            if (candidate && candidate.content?.parts?.[0]?.text) {
+                return candidate.content.parts[0].text;
+            } else {
+                 console.error("API response error:", JSON.stringify(result));
+                throw new Error("APIからの応答が予期した形式ではありません。");
+            }
+        }
+
+        function replaceCitationsWithLinks(element, refCount) {
+            const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null, false);
+            let node;
+            const nodesToModify = [];
+
+            while (node = walker.nextNode()) {
+                const parentTag = node.parentElement.tagName.toLowerCase();
+                // Do not replace inside these tags
+                if (parentTag === 'script' || parentTag === 'style' || parentTag === 'pre' || parentTag === 'code') {
+                    continue;
+                }
+                if (/\[\d+\]/.test(node.nodeValue)) {
+                    nodesToModify.push(node);
+                }
+            }
+
+            nodesToModify.forEach(node => {
+                const fragment = document.createDocumentFragment();
+                // Split text by citation pattern, e.g., "text [1] more text" -> ["text ", "[1]", " more text"]
+                const parts = node.nodeValue.split(/(\[\d+\])/g);
+                
+                parts.forEach(part => {
+                    const match = part.match(/^\[(\d+)\]$/);
+                    if (match) {
+                        const num = parseInt(match[1], 10);
+                        if (num > 0 && num <= refCount) {
+                            const sup = document.createElement('sup');
+                            sup.className = "font-bold text-blue-600";
+                            const link = document.createElement('a');
+                            link.href = `#ref-${num}`;
+                            link.textContent = part;
+                            sup.appendChild(link);
+                            fragment.appendChild(sup);
+                        } else {
+                            // If citation number is out of bounds, treat as normal text
+                            fragment.appendChild(document.createTextNode(part));
+                        }
+                    } else {
+                        fragment.appendChild(document.createTextNode(part));
+                    }
+                });
+                node.parentNode.replaceChild(fragment, node);
+            });
+        }
+
+        async function renderContent(targetElement) {
+            let markdown = targetElement.innerHTML; // raw markdown from model
+            const mermaidBlocks = [];
+            
+            // 1. Extract mermaid blocks and replace them with placeholders.
+            markdown = markdown.replace(/```mermaid\n([\s\S]*?)\n```/g, (match, code) => {
+                const placeholderId = `mermaid-placeholder-${mermaidBlocks.length}`;
+                mermaidBlocks.push(code);
+                return `<div id="${placeholderId}"></div>`;
+            });
+
+            // 2. Parse the rest of the markdown that doesn't contain mermaid blocks.
+            targetElement.innerHTML = marked.parse(markdown);
+
+            // 3. Process citations: find reference list, add IDs, and replace citation numbers with links.
+            const headers = targetElement.querySelectorAll('h1, h2, h3, h4, h5, h6');
+            let refHeader = Array.from(headers).find(h => h.textContent.trim() === '参考文献');
+            let refCount = 0;
+
+            if (refHeader) {
+                let refList = refHeader.nextElementSibling;
+                // Find the next UL or OL, skipping other elements like P
+                while (refList && refList.tagName !== 'OL' && refList.tagName !== 'UL') {
+                    refList = refList.nextElementSibling;
+                }
+                if (refList) {
+                    const listItems = refList.querySelectorAll('li');
+                    refCount = listItems.length;
+                    listItems.forEach((li, index) => {
+                        li.id = `ref-${index + 1}`;
+                    });
+                }
+            }
+
+            if (refCount > 0) {
+                replaceCitationsWithLinks(targetElement, refCount);
+            }
+
+            // 4. Re-insert mermaid content into placeholders and prepare them for rendering.
+            mermaidBlocks.forEach((code, index) => {
+                const placeholder = targetElement.querySelector(`#mermaid-placeholder-${index}`);
+                if (placeholder) {
+                    const container = document.createElement('div');
+                    container.className = 'mermaid';
+                    
+                    const decoder = document.createElement('textarea');
+                    decoder.innerHTML = code; // Decode entities like &gt;
+                    container.textContent = decoder.value;
+                    
+                    placeholder.replaceWith(container);
+                }
+            });
+
+            // 5. Run Mermaid on all prepared containers.
+            if (targetElement.querySelectorAll('.mermaid').length > 0) {
+                try {
+                    await mermaid.run({
+                        nodes: targetElement.querySelectorAll('.mermaid')
+                    });
+                } catch (e) {
+                    console.error("Mermaid rendering error:", e);
+                    targetElement.querySelectorAll('.mermaid').forEach(el => {
+                        // Check if it's empty, meaning it failed to render
+                        if (el.innerHTML.trim() === '') {
+                             el.innerHTML = `<div class="p-2 border border-red-400 bg-red-100 text-red-700 rounded">Mermaid図の描画に失敗しました。<br><pre>${el.textContent}</pre></div>`;
+                        }
+                    });
+                }
+            }
+            
+            // 6. Render any LaTeX math equations.
+            if (window.renderMathInElement) {
+                renderMathInElement(targetElement, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}
+                    ], throwOnError: false
+                });
+            }
+        }
+        
+        async function copyToClipboard(elementId) {
+            const index = parseInt(elementId.replace('model-response-', ''));
+            const originalMarkdown = chatHistory[index].parts[0].text;
+            try {
+                await navigator.clipboard.writeText(originalMarkdown);
+                const button = document.querySelector(`#${elementId} button:first-child`);
+                const originalText = button.textContent;
+                button.textContent = 'コピーしました！';
+                setTimeout(() => { button.textContent = originalText; }, 2000);
+            } catch (err) {
+                console.error('Failed to copy: ', err);
+            }
+        }
+
+        async function exportPdf(elementId) {
+            const { jsPDF } = window.jspdf;
+            const originalContent = document.querySelector(`#${elementId} .model-content`);
+
+            const printableArea = document.createElement('div');
+            printableArea.style.position = 'absolute';
+            printableArea.style.left = '-9999px';
+            printableArea.style.width = '1024px'; // A4-like width
+            printableArea.style.padding = '50px';
+            printableArea.style.background = '#fff';
+            printableArea.className = 'prose max-w-none';
+
+            const headerHtml = `
+                <div style="margin-bottom: 40px; border-bottom: 1px solid #ddd; padding-bottom: 20px;">
+                    <h1 style="font-size: 24px; margin: 0;">生成された解説記事</h1>
+                    <p style="text-align: right; margin: 0; color: #555;">${new Date().toLocaleString('ja-JP')}</p>
+                </div>
+            `;
+            const contentClone = originalContent.cloneNode(true);
+            
+            printableArea.innerHTML = headerHtml;
+            printableArea.appendChild(contentClone);
+            document.body.appendChild(printableArea);
+
+            const canvas = await html2canvas(printableArea, { 
+                scale: 2
+            });
+
+            document.body.removeChild(printableArea);
+
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF({
+                orientation: 'portrait',
+                unit: 'px',
+                format: [canvas.width, canvas.height]
+            });
+            pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+            pdf.save('gemini-export.pdf');
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorBox.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
+
+
