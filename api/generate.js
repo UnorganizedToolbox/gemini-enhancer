@@ -21,7 +21,7 @@ export default async function handler(req, res) {
     // Geminiクライアントを初期化します
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-pro-latest",
+      model: "gemini-2.5-pro",
       systemInstruction: {
         parts: [{ text: systemPrompt }],
       },
