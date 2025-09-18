@@ -77,6 +77,16 @@
         const errorBox = document.getElementById('error-box');
         const errorMessage = document.getElementById('error-message');
         
+        let adminkey = null
+        try{
+            const urlParams = new URLSerchParams(window.location.search);
+            if (urlParams.has('admin_key')) {
+                adminKey = urlParams.get('admin_key');
+                console.log("管理者モードで実行中");
+            }
+        } catch (e) {
+        // 何もしない
+        }
         let chatHistory = [];
         let latestModelResponse = "";
 
@@ -186,7 +196,8 @@
                 // 会話履歴とシステムプロンプトをバックエンドに送る
                 body: JSON.stringify({ 
                     chatHistory: chatHistory,
-                    systemPrompt: systemPrompt 
+                    systemPrompt: systemPrompt, 
+                    adminKey: adminKey
                 }),
             });
 
@@ -385,6 +396,7 @@
     </script>
 </body>
 </html>
+
 
 
 
