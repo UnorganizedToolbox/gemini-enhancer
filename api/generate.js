@@ -8,20 +8,26 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
+  const { adminKey } = req.body; // フロントエンドから送られてくるキーを取得
+  const ADMIN_KEY = process.env.ADMIN_KEY; // Vercelに設定したキーを読み込み
 
-  // ★★★ レートリミット処理 ここから ★★★
-  const ip = req.headers['x-forwarded-for'] || '127.0.0.1';
-  const limit = 5; // 1日の上限回数
-  const duration = 60 * 60 * 24; // 24時間
+  // 管理者キーが設定されており、かつ、送られてきたキーと一致する場合
+  if (ADMIN_KEY && adminKey === ADMIN_KEY) {
+    // レートリミットをスキップして、通常の処理に進む
+  } else {
+    // ★★★ レートリミット処理 ここから ★★★
+    const ip = req.headers['x-forwarded-for'] || '127.0.0.1';
+    const limit = 5; // 1日の上限回数
+    const duration = 60 * 60 * 24; // 24時間
 
-  const key = `ratelimit_${ip}`;
-  const current = await kv.get(key);
+    const key = `ratelimit_${ip}`;
+    const current = await kv.get(key);
 
-  if (current && current >= limit) {
-    return res.status(429).json({ error: `レートリミットを超えました。24時間後に再試行してください。` });
+    if (current && current >= limit) {
+      return res.status(429).json({ error: `レートリミットを超えました。24時間後に再試行してください。` });
+    }
+    // ★★★ レートリミット処理 ここまで ★★★
   }
-  // ★★★ レートリミット処理 ここまで ★★★
-
   try {
     // データベースのカウントを1増やす
     await kv.incr(key);
