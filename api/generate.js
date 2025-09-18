@@ -1,6 +1,14 @@
-// /api/generate.js の try {...} ブロックの中身を以下に置き換え
+// /api/generate.js (完成版)
 
-try {
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+export default async function handler(req, res) {
+  // POSTリクエスト以外は拒否します
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method Not Allowed' });
+  }
+
+  try {
     // フロントエンドから送られてきた会話履歴とシステムプロンプトを受け取ります
     const { chatHistory, systemPrompt } = req.body;
 
@@ -19,7 +27,7 @@ try {
       },
     });
 
-    // ☆☆☆ 変更点：startChatを使わず、毎回コンテンツ全体を渡す ☆☆☆
+    // 会話の文脈全体を一度に渡して、次の応答を生成させます
     const result = await model.generateContent({
         contents: chatHistory,
     });
@@ -30,7 +38,8 @@ try {
     // 生成されたテキストをフロントエンドに返します
     res.status(200).json({ text: modelResponseText });
 
-} catch (error) {
+  } catch (error) {
     console.error('Error in API route:', error);
     res.status(500).json({ error: error.message || 'サーバーでエラーが発生しました。' });
+  }
 }
