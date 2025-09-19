@@ -1,4 +1,4 @@
-// /api/generate.js (認証・レートリミット・管理者除外 機能付き完成版)
+// /api/generate.js (最終完成版)
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@vercel/kv";
@@ -15,6 +15,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
+  // ★★★ 全ての処理を一つのtry...catchで囲う ★★★
   try {
     // --- 1. 認証トークンの検証 ---
     const token = req.headers.authorization?.split(' ')[1];
@@ -28,7 +29,7 @@ export default async function handler(req, res) {
       audience: process.env.AUTH0_AUDIENCE,
     });
     
-    const userId = payload.sub; // ユーザー固有のIDを取得
+    const userId = payload.sub;
     if (!userId) {
       return res.status(401).json({ error: '無効なトークンです。' });
     }
@@ -40,13 +41,15 @@ export default async function handler(req, res) {
     // --- 3. 利用回数制限 (管理者でない場合のみ) ---
     if (!isAdmin) {
       const key = `ratelimit_${userId}`;
-      const limit = 5; // 1日の上限回数
-      const duration = 60 * 60 * 24; // 24時間
+      const limit = 5;
+      const duration = 60 * 60 * 24;
 
       const currentUsage = await kv.get(key);
       if (currentUsage && currentUsage >= limit) {
         return res.status(429).json({ error: `利用回数の上限に達しました。24時間後に再試行してください。` });
       }
+      // カウントアップは、Gemini API呼び出しが成功した後に行う方がより親切ですが、
+      // ここで実行しても機能します。
       await kv.incr(key);
       if (!currentUsage) {
         await kv.expire(key, duration);
@@ -60,7 +63,7 @@ export default async function handler(req, res) {
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-pro-latest", // Proモデルを推奨
+      model: "gemini-1.5-pro-latest",
       systemInstruction: { parts: [{ text: systemPrompt }] },
     });
     const result = await model.generateContent({ contents: chatHistory });
@@ -70,6 +73,7 @@ export default async function handler(req, res) {
     res.status(200).json({ text: modelResponseText });
 
   } catch (error) {
+    // どの段階でエラーが起きても、ここで一括して処理する
     if (error instanceof jose.errors.JWTExpired) {
         return res.status(401).json({ error: '認証トークンが期限切れです。再度ログインしてください。' });
     }
