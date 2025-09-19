@@ -22,8 +22,8 @@ import { createClient } from "@vercel/kv";
 
 // 環境変数を手動で指定してクライアントを初期化
 const kv = createClient({
-  url: process.env.KV_REST_API_URL,
-  token: process.env.KV_REST_API_TOKEN,
+  url: process.env.UPSTASH_URL,
+  token: process.env.UPSTASH_TOKEN,
 });
 
 export default async function handler(req, res) {
