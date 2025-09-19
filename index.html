@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4451508889015447" crossorigin="anonymous"></script>
+    <script src="https://cdn.auth0.com/js/auth0-spa-js/2.1/auth0-spa-js.production.js"></script>
     <title>図付きAI</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -45,6 +46,10 @@
              <h1 class="text-2xl md:text-3xl font-bold text-gray-900">図付きAI</h1>
              <p class="text-gray-500 text-sm mt-1">AIとの対話で、Markdown・図(Mermaid)・数式(LaTeX)を含む解説記事を生成</p>
         </div>
+        <div id="auth-area">
+            <button id="btn-login" class="bg-blue-600 text-white font-bold py-2 px-4 rounded">ログイン</button>
+            <button id="btn-logout" class="hidden bg-gray-500 text-white font-bold py-2 px-4 rounded">ログアウト</button>
+        </div>
     </header>
 
     <main class="flex-1 container mx-auto p-4 max-w-5xl flex flex-col overflow-hidden">
@@ -71,105 +76,115 @@
     </main>
 
     <script>
-        const generateBtn = document.getElementById('generate-btn');
-        const promptTextarea = document.getElementById('prompt');
-        const chatHistoryDiv = document.getElementById('chat-history');
-        const errorBox = document.getElementById('error-box');
-        const errorMessage = document.getElementById('error-message');
+    // --- 1. 要素の取得 ---
+    const loginBtn = document.getElementById('btn-login');
+    const logoutBtn = document.getElementById('btn-logout');
+    const generateBtn = document.getElementById('generate-btn');
+    const promptTextarea = document.getElementById('prompt');
+    const chatHistoryDiv = document.getElementById('chat-history');
+    const errorBox = document.getElementById('error-box');
+    const errorMessage = document.getElementById('error-message');
+    
+    // --- 2. 変数の初期化 ---
+    let auth0Client = null;
+    let chatHistory = [];
+
+    // --- 3. Auth0 クライアントの設定と初期化 ---
+    const auth0Config = {
+      domain: "dev-x55cpyrdwlq2c0p2.us.auth0.com",      // ★★★ ここをあなたの情報に書き換える ★★★
+      clientId: "gNGTdI71kRMz2xAzG0gGgTzbGZJKzqD8", // ★★★ ここをあなたの情報に書き換える ★★★
+      authorizationParams: {
+        redirect_uri: window.location.origin,
+        // audience: "あなたのAPIのAudience" // API設定をしている場合はこれも必要
+      }
+    };
+
+    window.addEventListener('load', async () => {
+      try {
+        auth0Client = await auth0.createAuth0Client(auth0Config);
+        const query = window.location.search;
+        if (query.includes("code=") && query.includes("state=")) {
+          await auth0Client.handleRedirectCallback();
+          window.history.replaceState({}, document.title, "/");
+        }
+      } catch(e) {
+        console.error("Auth0の初期化に失敗しました:", e);
+        showError("認証サービスの初期化に失敗しました。キーが正しいか確認してください。");
+      } finally {
+        updateUI();
+      }
+    });
+
+    // --- 4. UI更新と認証イベントの処理 ---
+    const updateUI = async () => {
+      if (!auth0Client) return;
+      try {
+        const isAuthenticated = await auth0Client.isAuthenticated();
+        loginBtn.classList.toggle('hidden', isAuthenticated);
+        logoutBtn.classList.toggle('hidden', !isAuthenticated);
+        promptTextarea.disabled = !isAuthenticated;
+        generateBtn.disabled = !isAuthenticated;
+        if(!isAuthenticated) {
+          promptTextarea.placeholder = "利用するにはログインしてください";
+        } else {
+          promptTextarea.placeholder = "メッセージを入力...";
+        }
+      } catch(e) {
+        console.error("UI update failed:", e);
+      }
+    };
+
+    loginBtn.addEventListener('click', () => auth0Client.loginWithRedirect());
+    logoutBtn.addEventListener('click', () => auth0Client.logout({ logoutParams: { returnTo: window.location.origin } }));
+
+    // --- 5. チャット機能のコアロジック ---
+    mermaid.initialize({ startOnLoad: false, theme: 'default' });
+
+    promptTextarea.addEventListener('input', () => {
+        promptTextarea.style.height = 'auto';
+        promptTextarea.style.height = (promptTextarea.scrollHeight) + 'px';
+    });
+    promptTextarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            generateContent();
+        }
+    });
+    generateBtn.addEventListener('click', generateContent);
+
+    async function generateContent() {
+        const userPrompt = promptTextarea.value;
+        if (!userPrompt.trim()) return;
+        addMessageToHistory('user', userPrompt);
+        promptTextarea.value = '';
+        promptTextarea.style.height = 'auto';
+        generateBtn.disabled = true;
+        addTypingIndicator();
+        try {
+            const markdownText = await generateTextFromApi();
+            removeTypingIndicator();
+            addMessageToHistory('model', markdownText);
+        } catch (error) {
+            console.error('Error:', error);
+            showError(error.message || '不明なエラーが発生しました。');
+            removeTypingIndicator();
+        } finally {
+            const isAuthenticated = await auth0Client.isAuthenticated();
+            generateBtn.disabled = !isAuthenticated;
+        }
+    }
+
+    async function generateTextFromApi() {
+        if (!auth0Client) throw new Error("認証クライアントが初期化されていません。");
         
-        let adminKey = null
-        try{
-            const urlParams = new URLSerchParams(window.location.search);
-            if (urlParams.has('admin_key')) {
-                adminKey = urlParams.get('admin_key');
-                console.log("管理者モードで実行中");
-            }
-        } catch (e) {
-        // 何もしない
+        const isAuthenticated = await auth0Client.isAuthenticated();
+        if (!isAuthenticated) {
+            throw new Error("ログインが必要です。");
         }
-        let chatHistory = [];
-        let latestModelResponse = "";
+        
+        const accessToken = await auth0Client.getTokenSilently();
 
-        mermaid.initialize({ startOnLoad: false, theme: 'default' });
-
-        promptTextarea.addEventListener('input', () => {
-            promptTextarea.style.height = 'auto';
-            promptTextarea.style.height = (promptTextarea.scrollHeight) + 'px';
-        });
-
-        promptTextarea.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                generateContent();
-            }
-        });
-
-        generateBtn.addEventListener('click', generateContent);
-
-        async function generateContent() {
-            const userPrompt = promptTextarea.value;
-            if (!userPrompt.trim()) return;
-
-            addMessageToHistory('user', userPrompt);
-            promptTextarea.value = '';
-            promptTextarea.style.height = 'auto';
-
-            generateBtn.disabled = true;
-            addTypingIndicator();
-
-            try {
-                const markdownText = await generateTextFromApi();
-                latestModelResponse = markdownText;
-                removeTypingIndicator();
-                addMessageToHistory('model', markdownText);
-
-            } catch (error) {
-                console.error('Error:', error);
-                showError(error.message || '不明なエラーが発生しました。');
-                removeTypingIndicator();
-            } finally {
-                generateBtn.disabled = false;
-            }
-        }
-
-        function addMessageToHistory(role, content) {
-            const messageWrapper = document.createElement('div');
-            
-            if (role === 'user') {
-                messageWrapper.className = "p-4 bg-gray-100 rounded-lg ml-auto max-w-4/5";
-                messageWrapper.innerHTML = `<p class="font-semibold text-right">あなた</p><p class="whitespace-pre-wrap">${content.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>`;
-                chatHistory.push({ role: "user", parts: [{ text: content }] });
-            } else { // model
-                messageWrapper.id = `model-response-${chatHistory.length}`;
-                messageWrapper.className = "p-4 bg-blue-50 rounded-lg text-gray-700";
-                const exportButtons = `
-                    <div class="export-buttons flex items-center gap-2 mt-3 border-t pt-2">
-                        <button onclick="copyToClipboard('${messageWrapper.id}')" class="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded">Markdownコピー</button>
-                        <button onclick="exportPdf('${messageWrapper.id}')" class="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded">PDFエクスポート</button>
-                    </div>`;
-                messageWrapper.innerHTML = `<p class="font-semibold">アシスタント</p><div class="prose max-w-none model-content">${content}</div>${exportButtons}`;
-                chatHistory.push({ role: "model", parts: [{ text: content }] });
-                renderContent(messageWrapper.querySelector('.model-content'));
-            }
-            chatHistoryDiv.appendChild(messageWrapper);
-            chatHistoryDiv.scrollTop = chatHistoryDiv.scrollHeight;
-        }
-
-        function addTypingIndicator() {
-            const typingIndicator = document.createElement('div');
-            typingIndicator.id = "typing-indicator";
-            typingIndicator.className = "p-4 bg-blue-50 rounded-lg text-gray-700 flex items-center space-x-2";
-            typingIndicator.innerHTML = `<p class="font-semibold">アシスタント</p><div class="loader"></div>`;
-            chatHistoryDiv.appendChild(typingIndicator);
-            chatHistoryDiv.scrollTop = chatHistoryDiv.scrollHeight;
-        }
-
-        function removeTypingIndicator() {
-            const indicator = document.getElementById('typing-indicator');
-            if (indicator) indicator.remove();
-        }
-        async function generateTextFromApi() {
-            const systemPrompt = `あなたは優秀なテクニカルライターで、ユーザーと対話しながら解説記事を作成します。
+        const systemPrompt = `あなたは優秀なテクニカルライターで、ユーザーと対話しながら解説記事を作成します。
 
 # 利用可能なツール
 1.  **Markdown**: 構造化された文章を作成します。
@@ -186,216 +201,205 @@
     - ウェブサイトの場合：著者名（任意）「記事タイトル」サイト名. <URL>. (閲覧日: YYYY-MM-DD)
     - 書籍の場合：著者名『書籍名』出版社, 出版年
     - 直接参照した情報源がない場合:参考文献セクションには「なし」とだけ記載してください
-    - 読者のさらなる学習のために推奨できる資料がある場合は、「## 参考資料」というセクションを参考文献の後に設け、リスト形式で提示してください。`;
-            // 自作のバックエンドAPI (/api/generate) を呼び出す
-            const response = await fetch('/api/generate', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                // 会話履歴とシステムプロンプトをバックエンドに送る
-                body: JSON.stringify({ 
-                    chatHistory: chatHistory,
-                    systemPrompt: systemPrompt, 
-                    adminKey: adminKey
-                }),
-            });
+    - 読者のさらなる学習のために推奨できる資料がある場合は、「## 参考資料」というセクションを参考文献の後に設け、リスト形式で提示してください。`; // ★★★ ここにプロンプトを貼り付け ★★★
 
-  if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || `サーバーエラー (${response.status})`);
-  }
+        const response = await fetch('/api/generate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`
+            },
+            body: JSON.stringify({ 
+                chatHistory: chatHistory,
+                systemPrompt: systemPrompt
+            }),
+        });
 
-  const data = await response.json();
-  return data.text; // バックエンドから返ってきたテキストを返す
-}
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `サーバーエラー (${response.status})`);
+        }
+        const data = await response.json();
+        return data.text;
+    }
 
-        function replaceCitationsWithLinks(element, refCount) {
-            const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null, false);
-            let node;
-            const nodesToModify = [];
+    // --- 6. チャットUIのヘルパー関数群 ---
+    function addMessageToHistory(role, content) {
+        const messageWrapper = document.createElement('div');
+        if (role === 'user') {
+            messageWrapper.className = "p-4 bg-gray-100 rounded-lg ml-auto max-w-4/5";
+            messageWrapper.innerHTML = `<p class="font-semibold text-right">あなた</p><p class="whitespace-pre-wrap">${content.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>`;
+            chatHistory.push({ role: "user", parts: [{ text: content }] });
+        } else {
+            const responseId = `model-response-${chatHistory.length}`;
+            messageWrapper.id = responseId;
+            messageWrapper.className = "p-4 bg-blue-50 rounded-lg text-gray-700";
+            const exportButtons = `
+                <div class="export-buttons flex items-center gap-2 mt-3 border-t pt-2">
+                    <button onclick="copyToClipboard('${responseId}')" class="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded">Markdownコピー</button>
+                    <button onclick="exportPdf('${responseId}')" class="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded">PDFエクスポート</button>
+                </div>`;
+            messageWrapper.innerHTML = `<p class="font-semibold">アシスタント</p><div class="prose max-w-none model-content">${content}</div>${exportButtons}`;
+            chatHistory.push({ role: "model", parts: [{ text: content }] });
+            renderContent(messageWrapper.querySelector('.model-content'));
+        }
+        chatHistoryDiv.appendChild(messageWrapper);
+        chatHistoryDiv.scrollTop = chatHistoryDiv.scrollHeight;
+    }
 
-            while (node = walker.nextNode()) {
-                const parentTag = node.parentElement.tagName.toLowerCase();
-                // Do not replace inside these tags
-                if (parentTag === 'script' || parentTag === 'style' || parentTag === 'pre' || parentTag === 'code') {
-                    continue;
-                }
-                if (/\[\d+\]/.test(node.nodeValue)) {
-                    nodesToModify.push(node);
-                }
+    function addTypingIndicator() {
+        const typingIndicator = document.createElement('div');
+        typingIndicator.id = "typing-indicator";
+        typingIndicator.className = "p-4 bg-blue-50 rounded-lg text-gray-700 flex items-center space-x-2";
+        typingIndicator.innerHTML = `<p class="font-semibold">アシスタント</p><div class="loader"></div>`;
+        chatHistoryDiv.appendChild(typingIndicator);
+        chatHistoryDiv.scrollTop = chatHistoryDiv.scrollHeight;
+    }
+
+    function removeTypingIndicator() {
+        const indicator = document.getElementById('typing-indicator');
+        if (indicator) indicator.remove();
+    }
+
+    function replaceCitationsWithLinks(element, refCount) {
+        const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+        let node;
+        const nodesToModify = [];
+        while (node = walker.nextNode()) {
+            if (node.parentElement.closest('pre, code')) continue;
+            if (/\[\d+\]/.test(node.nodeValue)) {
+                nodesToModify.push(node);
             }
-
-            nodesToModify.forEach(node => {
-                const fragment = document.createDocumentFragment();
-                // Split text by citation pattern, e.g., "text [1] more text" -> ["text ", "[1]", " more text"]
-                const parts = node.nodeValue.split(/(\[\d+\])/g);
-                
-                parts.forEach(part => {
-                    const match = part.match(/^\[(\d+)\]$/);
-                    if (match) {
-                        const num = parseInt(match[1], 10);
-                        if (num > 0 && num <= refCount) {
-                            const sup = document.createElement('sup');
-                            sup.className = "font-bold text-blue-600";
-                            const link = document.createElement('a');
-                            link.href = `#ref-${num}`;
-                            link.textContent = part;
-                            sup.appendChild(link);
-                            fragment.appendChild(sup);
-                        } else {
-                            // If citation number is out of bounds, treat as normal text
-                            fragment.appendChild(document.createTextNode(part));
-                        }
+        }
+        nodesToModify.forEach(node => {
+            const fragment = document.createDocumentFragment();
+            const parts = node.nodeValue.split(/(\[\d+\])/g);
+            parts.forEach(part => {
+                const match = part.match(/^\[(\d+)\]$/);
+                if (match) {
+                    const num = parseInt(match[1], 10);
+                    if (num > 0 && num <= refCount) {
+                        const sup = document.createElement('sup');
+                        sup.className = "font-bold text-blue-600";
+                        const link = document.createElement('a');
+                        link.href = `#ref-${num}`;
+                        link.textContent = part;
+                        sup.appendChild(link);
+                        fragment.appendChild(sup);
                     } else {
                         fragment.appendChild(document.createTextNode(part));
                     }
-                });
-                node.parentNode.replaceChild(fragment, node);
+                } else {
+                    fragment.appendChild(document.createTextNode(part));
+                }
             });
+            node.parentNode.replaceChild(fragment, node);
+        });
+    }
+
+    async function renderContent(targetElement) {
+        let markdown = targetElement.innerHTML;
+        const mermaidBlocks = [];
+        markdown = markdown.replace(/```mermaid\n([\s\S]*?)\n```/g, (match, code) => {
+            const placeholderId = `mermaid-placeholder-${mermaidBlocks.length}`;
+            mermaidBlocks.push(code);
+            return `<div id="${placeholderId}"></div>`;
+        });
+        targetElement.innerHTML = marked.parse(markdown);
+        
+        const refHeader = Array.from(targetElement.querySelectorAll('h1, h2')).find(h => h.textContent.trim() === '参考文献');
+        let refCount = 0;
+        if (refHeader) {
+            let refList = refHeader.nextElementSibling;
+            while (refList && !['OL', 'UL'].includes(refList.tagName)) {
+                refList = refList.nextElementSibling;
+            }
+            if (refList) {
+                const listItems = refList.querySelectorAll('li');
+                refCount = listItems.length;
+                listItems.forEach((li, index) => {
+                    li.id = `ref-${index + 1}`;
+                });
+            }
+        }
+        if (refCount > 0) {
+            replaceCitationsWithLinks(targetElement, refCount);
         }
 
-        async function renderContent(targetElement) {
-            let markdown = targetElement.innerHTML; // raw markdown from model
-            const mermaidBlocks = [];
-            
-            // 1. Extract mermaid blocks and replace them with placeholders.
-            markdown = markdown.replace(/```mermaid\n([\s\S]*?)\n```/g, (match, code) => {
-                const placeholderId = `mermaid-placeholder-${mermaidBlocks.length}`;
-                mermaidBlocks.push(code);
-                return `<div id="${placeholderId}"></div>`;
-            });
-
-            // 2. Parse the rest of the markdown that doesn't contain mermaid blocks.
-            targetElement.innerHTML = marked.parse(markdown);
-
-            // 3. Process citations: find reference list, add IDs, and replace citation numbers with links.
-            const headers = targetElement.querySelectorAll('h1, h2, h3, h4, h5, h6');
-            let refHeader = Array.from(headers).find(h => h.textContent.trim() === '参考文献');
-            let refCount = 0;
-
-            if (refHeader) {
-                let refList = refHeader.nextElementSibling;
-                // Find the next UL or OL, skipping other elements like P
-                while (refList && refList.tagName !== 'OL' && refList.tagName !== 'UL') {
-                    refList = refList.nextElementSibling;
-                }
-                if (refList) {
-                    const listItems = refList.querySelectorAll('li');
-                    refCount = listItems.length;
-                    listItems.forEach((li, index) => {
-                        li.id = `ref-${index + 1}`;
-                    });
-                }
+        mermaidBlocks.forEach((code, index) => {
+            const placeholder = targetElement.querySelector(`#mermaid-placeholder-${index}`);
+            if (placeholder) {
+                const container = document.createElement('div');
+                container.className = 'mermaid';
+                const decoder = document.createElement('textarea');
+                decoder.innerHTML = code;
+                container.textContent = decoder.value;
+                placeholder.replaceWith(container);
             }
+        });
 
-            if (refCount > 0) {
-                replaceCitationsWithLinks(targetElement, refCount);
-            }
-
-            // 4. Re-insert mermaid content into placeholders and prepare them for rendering.
-            mermaidBlocks.forEach((code, index) => {
-                const placeholder = targetElement.querySelector(`#mermaid-placeholder-${index}`);
-                if (placeholder) {
-                    const container = document.createElement('div');
-                    container.className = 'mermaid';
-                    
-                    const decoder = document.createElement('textarea');
-                    decoder.innerHTML = code; // Decode entities like &gt;
-                    container.textContent = decoder.value;
-                    
-                    placeholder.replaceWith(container);
-                }
-            });
-
-            // 5. Run Mermaid on all prepared containers.
-            if (targetElement.querySelectorAll('.mermaid').length > 0) {
-                try {
-                    await mermaid.run({
-                        nodes: targetElement.querySelectorAll('.mermaid')
-                    });
-                } catch (e) {
-                    console.error("Mermaid rendering error:", e);
-                    targetElement.querySelectorAll('.mermaid').forEach(el => {
-                        // Check if it's empty, meaning it failed to render
-                        if (el.innerHTML.trim() === '') {
-                             el.innerHTML = `<div class="p-2 border border-red-400 bg-red-100 text-red-700 rounded">Mermaid図の描画に失敗しました。<br><pre>${el.textContent}</pre></div>`;
-                        }
-                    });
-                }
-            }
-            
-            // 6. Render any LaTeX math equations.
-            if (window.renderMathInElement) {
-                renderMathInElement(targetElement, {
-                    delimiters: [
-                        {left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}
-                    ], throwOnError: false
+        if (targetElement.querySelectorAll('.mermaid').length > 0) {
+            try {
+                await mermaid.run({ nodes: targetElement.querySelectorAll('.mermaid') });
+            } catch (e) {
+                console.error("Mermaid rendering error:", e);
+                targetElement.querySelectorAll('.mermaid').forEach(el => {
+                    if (el.innerHTML.trim() === '') {
+                         el.innerHTML = `<div class="p-2 border border-red-400 bg-red-100 text-red-700 rounded">Mermaid図の描画に失敗しました。<br><pre>${el.textContent}</pre></div>`;
+                    }
                 });
             }
         }
         
-        async function copyToClipboard(elementId) {
-            const index = parseInt(elementId.replace('model-response-', ''));
-            const originalMarkdown = chatHistory[index].parts[0].text;
-            try {
-                await navigator.clipboard.writeText(originalMarkdown);
-                const button = document.querySelector(`#${elementId} button:first-child`);
-                const originalText = button.textContent;
-                button.textContent = 'コピーしました！';
-                setTimeout(() => { button.textContent = originalText; }, 2000);
-            } catch (err) {
-                console.error('Failed to copy: ', err);
-            }
-        }
-
-        async function exportPdf(elementId) {
-            const { jsPDF } = window.jspdf;
-            const originalContent = document.querySelector(`#${elementId} .model-content`);
-
-            const printableArea = document.createElement('div');
-            printableArea.style.position = 'absolute';
-            printableArea.style.left = '-9999px';
-            printableArea.style.width = '1024px'; // A4-like width
-            printableArea.style.padding = '50px';
-            printableArea.style.background = '#fff';
-            printableArea.className = 'prose max-w-none';
-
-            const headerHtml = `
-                <div style="margin-bottom: 40px; border-bottom: 1px solid #ddd; padding-bottom: 20px;">
-                    <h1 style="font-size: 24px; margin: 0;">生成された解説記事</h1>
-                    <p style="text-align: right; margin: 0; color: #555;">${new Date().toLocaleString('ja-JP')}</p>
-                </div>
-            `;
-            const contentClone = originalContent.cloneNode(true);
-            
-            printableArea.innerHTML = headerHtml;
-            printableArea.appendChild(contentClone);
-            document.body.appendChild(printableArea);
-
-            const canvas = await html2canvas(printableArea, { 
-                scale: 2
+        if (window.renderMathInElement) {
+            renderMathInElement(targetElement, {
+                delimiters: [ {left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false} ],
+                throwOnError: false
             });
-
-            document.body.removeChild(printableArea);
-
-            const imgData = canvas.toDataURL('image/png');
-            const pdf = new jsPDF({
-                orientation: 'portrait',
-                unit: 'px',
-                format: [canvas.width, canvas.height]
-            });
-            pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
-            pdf.save('gemini-export.pdf');
         }
-
-        function showError(message) {
-            errorMessage.textContent = message;
-            errorBox.classList.remove('hidden');
+    }
+    
+    async function copyToClipboard(elementId) {
+        const index = parseInt(elementId.replace('model-response-', ''));
+        const originalMarkdown = chatHistory[index].parts[0].text;
+        try {
+            await navigator.clipboard.writeText(originalMarkdown);
+            const button = document.querySelector(`#${elementId} button:first-child`);
+            const originalText = button.textContent;
+            button.textContent = 'コピーしました！';
+            setTimeout(() => { button.textContent = originalText; }, 2000);
+        } catch (err) {
+            console.error('Failed to copy: ', err);
         }
-    </script>
+    }
+
+    async function exportPdf(elementId) {
+        const { jsPDF } = window.jspdf;
+        const originalContent = document.querySelector(`#${elementId} .model-content`);
+        const printableArea = document.createElement('div');
+        printableArea.style.cssText = 'position:absolute; left:-9999px; width:1024px; padding:50px; background:#fff;';
+        printableArea.className = 'prose max-w-none';
+        const headerHtml = `<div style="margin-bottom: 40px; border-bottom: 1px solid #ddd; padding-bottom: 20px;"><h1 style="font-size: 24px; margin: 0;">生成された解説記事</h1><p style="text-align: right; margin: 0; color: #555;">${new Date().toLocaleString('ja-JP')}</p></div>`;
+        const contentClone = originalContent.cloneNode(true);
+        printableArea.innerHTML = headerHtml;
+        printableArea.appendChild(contentClone);
+        document.body.appendChild(printableArea);
+        const canvas = await html2canvas(printableArea, { scale: 2 });
+        document.body.removeChild(printableArea);
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: [canvas.width, canvas.height] });
+        pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+        pdf.save('gemini-export.pdf');
+    }
+
+    function showError(message) {
+        errorMessage.textContent = message;
+        errorBox.classList.remove('hidden');
+    }
+</script>
 </body>
 </html>
+
 
 
 
