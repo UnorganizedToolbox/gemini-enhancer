@@ -154,6 +154,7 @@
     generateBtn.addEventListener('click', generateContent);
 
     async function generateContent() {
+        const userApiKey = localStorage.getItem('user_gemini_api_key')
         const userPrompt = promptTextarea.value;
         if (!userPrompt.trim()) return;
         addMessageToHistory('user', userPrompt);
@@ -175,34 +176,40 @@
         }
     }
 
-    async function generateTextFromApi() {
+    // index.htmlの<script>タグ内
+
+async function generateTextFromApi() {
+    const userApiKey = localStorage.getItem('user_gemini_api_key');
+    const systemPrompt = `## あなたの役割と行動原則
+あなたは、ユーザーの指示に一度で応答する、自律的なテクニカルライターです。対話型のアシスタントではありません。
+ユーザーからの最初のプロンプトを、記事作成のための唯一かつ完全な指示として解釈してください。
+不明な点があっても、確認のための質問を返してはいけません。与えられた情報の中で最善を尽くし、必ず一度の応答で記事全体を完成させてください。
+## 思考プロセス
+まず、ユーザーの要求を分析し、回答に必要な情報を特定します。
+次に、自身の内部知識だけに頼らず、必ずWeb検索を実行して、信頼できる情報源を複数見つけ出します。
+収集した情報と、以下のツールや指示に基づいて、一つの完成された解説記事を生成します。
+## 利用可能なツール
+Markdown: 構造化された文章を作成します。
+Mermaid: フローチャートや図を作成します。
+LaTeX: 数式を表現します。
+## 出力に関する指示
+Mermaid: フローチャートを作成する際は、原則として**上から下へ（TDまたはTB）**のレイアウトを使用してください。ノードのテキストに特殊文字 () : を含む場合は、テキスト全体を "" で囲んでください。
+参考文献と資料:
+実際に参照したWebページや書籍のみを、解説の最後に「## 参考文献」セクションを設け、以下の記法に従ってリストアップしてください。本文中の関連箇所には [1], [2] のように引用番号を付与してください。
+ウェブサイト: 著者名（任意）「記事タイトル」サイト名. <URL>. (閲覧日: {{YYYY-MM-DD}})
+書籍: 著者名『書籍名』出版社, 出版年.
+直接参照した情報源がない場合、参考文献セクションには「なし」とだけ記載してください。
+読者のさらなる学習のために推奨できる資料がある場合は、「## 参考資料」というセクションを参考文献の後に設け、リスト形式で提示してください。`;
+
+    if (!userApiKey) {
+        // --- 無料ユーザー（あなたのサーバー経由）の処理 ---
+        console.log("サーバー経由で実行します（回数制限・認証あり）");
+
         if (!auth0Client) throw new Error("認証クライアントが初期化されていません。");
-        
         const isAuthenticated = await auth0Client.isAuthenticated();
-        if (!isAuthenticated) {
-            throw new Error("ログインが必要です。");
-        }
+        if (!isAuthenticated) throw new Error("ログインが必要です。");
         
         const accessToken = await auth0Client.getTokenSilently();
-
-        const systemPrompt = `あなたは優秀なテクニカルライターで、ユーザーと対話しながら解説記事を作成します。
-
-# 利用可能なツール
-1.  **Markdown**: 構造化された文章を作成します。
-2.  **Mermaid**: \`\`\`mermaid コードブロックで図を作成します。フローチャート、シーケンス図などが利用可能です。
-3.  **LaTeX**: \`$...\` や \`$$...\` で数式を表現します。
-
-# 指示
-- ユーザーの要求に応じて、これらのツールを適切に組み合わせ、プロフェッショナルな解説を生成してください。
-- 特に、ハーバー・ボッシュ法のような化学プロセスや、システムのワークフローを説明する場合は、Mermaidを積極的に使い、フローチャートとして視覚的に表現してください。
-- **Mermaidの注意点**: ノードのテキストに括弧 \`()\` やコロン \`:\` などの特殊文字が含まれる場合は、必ずテキスト全体をダブルクォーテーション \`""\` で囲んでください。例: \`A["天然ガス (CH4)"] --> B["N2: 精製"]\`
-- 以前の会話内容を記憶し、文脈に沿った応答をしてください。
-- **参考文献**: 解説の最後には必ず「## 参考文献」というセクションを設け、参考にした情報源をリストアップしてください。本文中では、関連する記述の直後に \`[1]\`, \`[2]\` のように引用番号を付与してください。仮に参考文献が存在しない場合、その旨を記載するか、単に『なし』と記載してください
-- **参考になるもの**: 必要であれば、「## 参考文献」セクションの直後に参考となるウェブサイト・書籍等をリスト形式で提示してください。
-    - ウェブサイトの場合：著者名（任意）「記事タイトル」サイト名. <URL>. (閲覧日: YYYY-MM-DD)
-    - 書籍の場合：著者名『書籍名』出版社, 出版年
-    - 直接参照した情報源がない場合:参考文献セクションには「なし」とだけ記載してください
-    - 読者のさらなる学習のために推奨できる資料がある場合は、「## 参考資料」というセクションを参考文献の後に設け、リスト形式で提示してください。`; // ★★★ ここにプロンプトを貼り付け ★★★
 
         const response = await fetch('/api/generate', {
             method: 'POST',
@@ -215,14 +222,58 @@
                 systemPrompt: systemPrompt
             }),
         });
-
         if (!response.ok) {
             const errorData = await response.json();
             throw new Error(errorData.error || `サーバーエラー (${response.status})`);
         }
         const data = await response.json();
         return data.text;
+
+    } else {
+        // --- BYOKユーザー（Google APIへ直接）の処理 ---
+        console.log("ユーザー提供のAPIキーを使用して直接実行します。");
+        
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${userApiKey}`;
+        
+        const payload = {
+            contents: chatHistory,
+            systemInstruction: {
+                parts: [{ text: systemPrompt }],
+            },
+        };
+
+        try {
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(`Google API エラー (${response.status}): ${errorData.error?.message || '不明なエラー'}`);
+            }
+
+            const result = await response.json();
+            const modelResponseText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+
+            if (!modelResponseText) {
+                throw new Error("APIからの応答が予期した形式ではありません。");
+            }
+            return modelResponseText;
+
+        } catch (error) {
+            console.error("Google API direct call error:", error);
+            // エラーメッセージにAPIキーが含まれないように配慮
+            if (error.message.includes(userApiKey)) {
+                throw new Error("Google APIへの接続中にエラーが発生しました。APIキーが正しいか確認してください。");
+            }
+            throw error;
+        }
     }
+}
 
     // --- 6. チャットUIのヘルパー関数群 ---
     function addMessageToHistory(role, content) {
@@ -398,8 +449,6 @@
     document.body.appendChild(printableArea);
     const canvas = await html2canvas(printableArea, { scale: 2 });
     document.body.removeChild(printableArea);
-    const canvas = await html2canvas(printableArea, { scale: 2 });
-    document.body.removeChild(printableArea);
 
     const imgData = canvas.toDataURL('image/png');
     const pdf = new jsPDF({
@@ -419,6 +468,7 @@
 </script>
 </body>
 </html>
+
 
 
 
