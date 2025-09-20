@@ -1,8 +1,5 @@
-// /api/kv-test.js (手動接続バージョン)
-
 import { createClient } from "@vercel/kv";
 
-// 環境変数を手動で指定してクライアントを初期化
 const kv = createClient({
   url: process.env.UPSTASH_URL,
   token: process.env.UPSTASH_TOKEN,
@@ -12,13 +9,11 @@ export default async function handler(req, res) {
   try {
     const key = 'test-key';
     const value = new Date().toISOString();
-    
     await kv.set(key, value);
     const readValue = await kv.get(key);
-
     res.status(200).json({ 
       status: 'OK', 
-      message: 'Vercel KV connection is successful with manual client!',
+      message: 'Vercel KV connection is successful!',
       written: value,
       read: readValue 
     });
@@ -26,7 +21,7 @@ export default async function handler(req, res) {
     console.error('KV Test Error:', error);
     res.status(500).json({ 
       status: 'Error',
-      message: 'Failed to connect to Vercel KV with manual client.',
+      message: 'Failed to connect to Vercel KV.',
       error: error.message 
     });
   }
