@@ -375,24 +375,36 @@
     }
 
     async function exportPdf(elementId) {
-        const { jsPDF } = window.jspdf;
-        const originalContent = document.querySelector(`#${elementId} .model-content`);
-        const printableArea = document.createElement('div');
-        printableArea.style.cssText = 'position:absolute; left:-9999px; width:1024px; padding:50px; background:#fff;';
-        printableArea.className = 'prose max-w-none';
-        const headerHtml = `<div style="margin-bottom: 40px; border-bottom: 1px solid #ddd; padding-bottom: 20px;"><h1 style="font-size: 24px; margin: 0;">生成された解説記事</h1><p style="text-align: right; margin: 0; color: #555;">${new Date().toLocaleString('ja-JP')}</p></div>`;
-        const contentClone = originalContent.cloneNode(true);
-        printableArea.innerHTML = headerHtml;
-        printableArea.appendChild(contentClone);
-        document.body.appendChild(printableArea);
-        const canvas = await html2canvas(printableArea, { scale: 2 });
-        document.body.removeChild(printableArea);
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: [canvas.width, canvas.height] });
-        pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
-        pdf.save('gemini-export.pdf');
-    }
+    const { jsPDF } = window.jspdf;
+    const originalContent = document.querySelector(`#${elementId} .model-content`);
 
+    // ★★★ ここから追加 ★★★
+    // H1タグからタイトルを取得、なければデフォルト名
+    const titleElement = originalContent.querySelector('h1');
+    let pdfTitle = "gemini-export";
+    if (titleElement) {
+        // ファイル名として使えない文字を削除・置換
+        pdfTitle = titleElement.textContent.trim().replace(/[\\/:*?"<>|]/g, '_');
+    }
+    // ★★★ ここまで追加 ★★★
+
+    const printableArea = document.createElement('div');
+    // ... (以降の printableArea の設定は変更なし) ...
+
+    const canvas = await html2canvas(printableArea, { scale: 2 });
+    document.body.removeChild(printableArea);
+
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'px',
+        format: [canvas.width, canvas.height]
+    });
+    pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+
+    // ★★★ ファイル名を動的に変更 ★★★
+    pdf.save(`${pdfTitle}.pdf`);
+}
     function showError(message) {
         errorMessage.textContent = message;
         errorBox.classList.remove('hidden');
@@ -400,6 +412,7 @@
 </script>
 </body>
 </html>
+
 
 
 
