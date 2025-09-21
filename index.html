@@ -143,21 +143,80 @@
     };
 
     window.addEventListener('load', async () => {
-      try {
-        auth0Client = await auth0.createAuth0Client(auth0Config);
-        const query = window.location.search;
-        if (query.includes("code=") && query.includes("state=")) {
-          await auth0Client.handleRedirectCallback();
-          window.history.replaceState({}, document.title, "/");
+        try {
+            auth0Client = await auth0.createAuth0Client(auth0Config);
+            const query = window.location.search;
+            if (query.includes("code=") && query.includes("state=")) {
+              await auth0Client.handleRedirectCallback();
+              window.history.replaceState(66{}, document.title, "/");
+            }
+        } catch(e) {
+            console.error("Auth0の初期化に失敗しました:", e);
+            showError("認証サービスの初期化に失敗しました。キーが正しいか確認してください。");
+        } finally {
+            updateUI();
         }
-      } catch(e) {
-        console.error("Auth0の初期化に失敗しました:", e);
-        showError("認証サービスの初期化に失敗しました。キーが正しいか確認してください。");
-      } finally {
-        updateUI();
-      }
-    });
+        await configreClient();
+        await updateUI();
+      });
 
+    // --- Auth0クライアントの初期化を関数にまとめる ---
+async function configureClient() {
+    auth0Client = await auth0.createAuth0Client(auth0Config);
+    const query = window.location.search;
+    if (query.includes("code=") && query.includes("state=")) {
+        await auth0Client.handleRedirectCallback();
+        window.history.replaceState({}, document.title, "/");
+    }
+}
+
+// --- UIを更新する関数を更新 ---
+const updateUI = async () => {
+    const isAuthenticated = await auth0Client.isAuthenticated();
+    const userApiKey = localStorage.getItem('user_gemini_api_key');
+
+    const isLoggedInOrHasKey = isAuthenticated || userApiKey;
+
+    // ログイン済み or キー設定済みなら、モード選択エリアを隠し、チャットを表示
+    modeSelectionArea.classList.toggle('hidden', isLoggedInOrHasKey);
+    chatHistoryDiv.classList.toggle('hidden', !isLoggedInOrHasKey);
+    chatInputArea.classList.toggle('hidden', !isLoggedInOrHasKey);
+
+    // ヘッダーのログアウトボタンの表示/非表示
+    logoutBtn.classList.toggle('hidden', !isAuthenticated);
+};
+
+// --- ラジオボタンのイベントリスナーを新設 ---
+radioLogin.addEventListener('change', () => {
+    loginActionArea.classList.remove('hidden');
+    byokActionArea.classList.add('hidden');
+});
+radioByok.addEventListener('change', () => {
+    loginActionArea.classList.add('hidden');
+    byokActionArea.classList.remove('hidden');
+});
+
+
+// --- 保存ボタンの処理を新設 ---
+saveApiKeyBtn.addEventListener('click', () => {
+    const userApiKey = apiKeyInput.value.trim();
+    if (userApiKey) {
+        localStorage.setItem('user_gemini_api_key', userApiKey);
+        alert('APIキーを保存しました。ページを更新します。');
+        window.location.reload(); // ページを再読み込みしてUIを更新
+    } else {
+        alert('APIキーが入力されていません。');
+    }
+});
+
+// --- ログアウト処理を更新 ---
+logoutBtn.addEventListener('click', () => {
+    // localStorageのキーも削除する
+    localStorage.removeItem('user_gemini_api_key'); 
+    auth0Client.logout({
+        logoutParams: { returnTo: window.location.origin }
+    });
+});
     // --- 4. UI更新と認証イベントの処理 ---
     const updateUI = async () => {
       if (!auth0Client) return;
@@ -543,6 +602,7 @@ clearApiKeyBtn.addEventListener('click', () => {
 </script>
 </body>
 </html>
+
 
 
 
