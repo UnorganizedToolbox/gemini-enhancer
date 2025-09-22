@@ -519,42 +519,11 @@ Mermaid: フローチャートを作成する際は、原則として**上から
         errorMessage.textContent = message;
         errorBox.classList.remove('hidden');
     }
-    // --- 7. 設定モーダルのロジック (セクションを新設) ---
-// 設定ボタンを押したらモーダル表示
-settingsBtn.addEventListener('click', () => {
-    // 現在保存されているキーを読み込んで入力欄に表示
-    apiKeyInput.value = localStorage.getItem('user_gemini_api_key') || '';
-    settingsModal.classList.remove('hidden');
-});
-
-// キャンセルボタンでモーダルを閉じる
-closeModalBtn.addEventListener('click', () => {
-    settingsModal.classList.add('hidden');
-});
-
-// 保存ボタンの処理
-saveApiKeyBtn.addEventListener('click', () => {
-    const userApiKey = apiKeyInput.value.trim();
-    if (userApiKey) {
-        localStorage.setItem('user_gemini_api_key', userApiKey);
-        alert('APIキーを保存しました。');
-    } else {
-        // 入力が空ならキーを削除
-        localStorage.removeItem('user_gemini_api_key');
-        alert('APIキーを削除しました。');
-    }
-    settingsModal.classList.add('hidden');
-});
-
-// 削除ボタンの処理
-clearApiKeyBtn.addEventListener('click', () => {
-    localStorage.removeItem('user_gemini_api_key');
-    apiKeyInput.value = '';
-    alert('APIキーを削除しました。');
-});
+    
 </script>
 </body>
 </html>
+
 
 
 
