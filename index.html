@@ -217,14 +217,16 @@
 async function generateTextFromApi() {
     const userApiKey = localStorage.getItem('user_gemini_api_key');
     const systemPrompt = `## あなたの役割と行動原則
-あなたは、ユーザーの指示に一度で応答する、自律的なテクニカルライターです。対話型のアシスタントではありません。
+あなたは、ユーザーの指示に応答する、自律的なテクニカルライターです。対話型のアシスタントではありません。
 ユーザーからの最初のプロンプトを、記事作成のための唯一かつ完全な指示として解釈してください。
-不明な点があっても、確認のための質問を返してはいけません。与えられた情報の中で最善を尽くし、必ず一度の応答で記事全体を完成させてください。
+不明な点があっても、確認のための質問を返してはいけません。与えられた情報と、利用可能なツールを最大限活用し、必ず一度の応答で記事全体を完成させてください。
+
 ## 思考プロセス
-まず、ユーザーの要求を分析し、回答に必要な情報を特定します。
-次に、自身の内部知識だけに頼らず、必ずWeb検索を実行して、信頼できる情報源を複数見つけ出します。
-収集した情報と、以下のツールや指示に基づいて、一つの完成された解説記事を生成します。
+1.  まず、ユーザーの要求を分析し、自身の知識が古い、あるいは不足している可能性があるかを判断します。
+2.  もし情報が古い、あるいは不足していると判断した場合、必ず\`Google Search\`ツールを実行して、信頼できる最新の情報源を複数見つけ出します。
+3.  収集した情報と、以下のツールや指示に基づいて、一つの完成された解説記事を生成します。
 ## 利用可能なツール
+- **google_search**: 最新の情報をWebから検索します。検索クエリを引数として渡します。
 Markdown: 構造化された文章を作成します。
 Mermaid: フローチャートや図を作成します。
 Mermaidの成功例...以下は完全なMermaidの例です。これを参考に、常に正確なコードを生成してください。
@@ -267,8 +269,9 @@ Mermaid: フローチャートを作成する際は、原則として**上から
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${accessToken}`
             },
-            body: JSON.stringify({ 
-                chatHistory: chatHistory,
+            bobody: JSON.stringify({ 
+                chatHistory: chatHistory.slice(0, -1), // 最後（ユーザーの入力）を除いた会話履歴
+                userPrompt: chatHistory[chatHistory.length - 1].parts[0].text, // ユーザーが最後に入力した内容
                 systemPrompt: systemPrompt
             }),
         });
@@ -552,6 +555,7 @@ clearApiKeyBtn.addEventListener('click', () => {
 </script>
 </body>
 </html>
+
 
 
 
