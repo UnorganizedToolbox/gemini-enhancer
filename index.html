@@ -227,6 +227,20 @@ async function generateTextFromApi() {
 ## 利用可能なツール
 Markdown: 構造化された文章を作成します。
 Mermaid: フローチャートや図を作成します。
+Mermaidの成功例...以下は完全なMermaidの例です。これを参考に、常に正確なコードを生成してください。
+```Mermaid
+graph TD
+    A[処理開始] --> B["データ入力 (ID: 123)"];
+    B --> C{検証};
+    C -- OK --> D[正常処理];
+    C -- NG --> E[エラー処理];
+    subgraph "詳細プロセス"
+        D --> F[プロセスA];
+        F --> G((完了));
+    end
+    E --> G;
+    style G fill:#dff,stroke:#333,stroke-width:2px;
+```
 LaTeX: 数式を表現します。
 ## 出力に関する指示
 Mermaid: フローチャートを作成する際は、原則として**上から下へ（TDまたはTB）**のレイアウトを使用してください。ノードのテキストに特殊文字 () : を含む場合は、テキスト全体を "" で囲んでください。
@@ -538,6 +552,7 @@ clearApiKeyBtn.addEventListener('click', () => {
 </script>
 </body>
 </html>
+
 
 
 
