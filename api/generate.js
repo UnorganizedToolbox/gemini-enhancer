@@ -24,6 +24,7 @@ async function executeGoogleSearch(query) {
     const data = await response.json();
     // 検索結果のタイトルとスニペットを要約して返す
     const summary = data.items?.map(item => `Title: ${item.title}\nURL: ${item.link}\nSnippet: ${item.snippet}`).join('\n\n');
+    console.log(summary || "検索結果が見つかりませんでした。");
     return summary || "検索結果が見つかりませんでした。";
   } catch (error) {
     console.error("Google Search failed:", error);
