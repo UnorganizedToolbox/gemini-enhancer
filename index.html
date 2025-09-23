@@ -106,7 +106,7 @@
         const byokActionArea = document.getElementById('byok-action-area');
         const apiKeyInput = document.getElementById('api-key-input');
         const saveApiKeyBtn = document.getElementById('save-api-key-btn');
-        
+    
         // --- 2. 変数の初期化 ---
         let auth0Client = null;
         let chatHistory = [{ role: "model", parts: [{ text: "こんにちは！どのような解説記事を作成しますか？" }] }];
@@ -137,67 +137,69 @@
             }
         });
 
-        // --- 4. UI更新とイベント処理 ---
-        const updateUI = async () => {
-            if (!auth0Client) return;
-            const isAuthenticated = await auth0Client.isAuthenticated();
-            const userApiKey = localStorage.getItem('user_gemini_api_key');
-            const isLoggedInOrHasKey = isAuthenticated || userApiKey;
+    // --- 4. UI更新とイベント処理 ---
+    const updateUI = async () => {
+        if (!auth0Client) return;
+        const isAuthenticated = await auth0Client.isAuthenticated();
+        const userApiKey = localStorage.getItem('user_gemini_api_key');
+        const isLoggedInOrHasKey = isAuthenticated || userApiKey;
 
-            modeSelectionArea.classList.toggle('hidden', isLoggedInOrHasKey);
-            chatContainer.classList.toggle('hidden', !isLoggedInOrHasKey);
-            logoutBtn.classList.toggle('hidden', !isAuthenticated && !userApiKey);
-        };
+        modeSelectionArea.classList.toggle('hidden', isLoggedInOrHasKey);
+        chatContainer.classList.toggle('hidden', !isLoggedInOrHasKey);
+        logoutBtn.classList.toggle('hidden', !isAuthenticated && !userApiKey);
+        
+        const isReady = isLoggedInOrHasKey;
+        promptTextarea.disabled = !isReady;
+        generateBtn.disabled = !isReady;
+        if(!isReady) {
+          promptTextarea.placeholder = "利用するには、上記の方法を選択してください";
+        } else {
+          promptTextarea.placeholder = "メッセージを入力...";
+        }
+    };
 
-        loginBtn.addEventListener('click', () => auth0Client.loginWithRedirect());
-        logoutBtn.addEventListener('click', () => {
-            localStorage.removeItem('user_gemini_api_key');
-            auth0Client.logout({ logoutParams: { returnTo: window.location.origin } });
-        });
-        
-        radioLogin.addEventListener('change', () => {
-            loginActionArea.classList.remove('hidden');
-            byokActionArea.classList.add('hidden');
-        });
-        radioByok.addEventListener('change', () => {
-            loginActionArea.classList.add('hidden');
-            byokActionArea.classList.remove('hidden');
-        });
-        
-        saveApiKeyBtn.addEventListener('click', () => {
-            const userApiKey = apiKeyInput.value.trim();
-            if (userApiKey) {
-                localStorage.setItem('user_gemini_api_key', userApiKey);
-                alert('APIキーを保存しました。');
-                updateUI();
-            } else {
-                alert('APIキーが入力されていません。');
-            }
-        });
+    loginBtn.addEventListener('click', () => auth0Client.loginWithRedirect());
+    logoutBtn.addEventListener('click', () => {
+        localStorage.removeItem('user_gemini_api_key');
+        auth0Client.logout({ logoutParams: { returnTo: window.location.origin } });
+    });
+    
+    radioLogin.addEventListener('change', () => {
+        loginActionArea.classList.remove('hidden');
+        byokActionArea.classList.add('hidden');
+    });
+    radioByok.addEventListener('change', () => {
+        loginActionArea.classList.add('hidden');
+        byokActionArea.classList.remove('hidden');
+    });
+    
+    saveApiKeyBtn.addEventListener('click', () => {
+        const userApiKey = apiKeyInput.value.trim();
+        if (userApiKey) {
+            localStorage.setItem('user_gemini_api_key', userApiKey);
+            alert('APIキーを保存しました。');
+            updateUI();
+        } else {
+            alert('APIキーが入力されていません。');
+        }
+    });
+    
     // --- 5. チャット機能のコアロジック ---
     mermaid.initialize({ startOnLoad: false, theme: 'default' });
-
-    promptTextarea.addEventListener('input', () => {
-        promptTextarea.style.height = 'auto';
-        promptTextarea.style.height = (promptTextarea.scrollHeight) + 'px';
-    });
     promptTextarea.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            generateContent();
-        }
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); generateContent(); }
     });
     generateBtn.addEventListener('click', generateContent);
 
     async function generateContent() {
-        const userApiKey = localStorage.getItem('user_gemini_api_key')
         const userPrompt = promptTextarea.value;
         if (!userPrompt.trim()) return;
+        
         addMessageToHistory('user', userPrompt);
         promptTextarea.value = '';
-        promptTextarea.style.height = 'auto';
         generateBtn.disabled = true;
         addTypingIndicator();
+        
         try {
             const markdownText = await generateTextFromApi();
             removeTypingIndicator();
@@ -207,14 +209,11 @@
             showError(error.message || '不明なエラーが発生しました。');
             removeTypingIndicator();
         } finally {
-            const isAuthenticated = await auth0Client.isAuthenticated();
-            generateBtn.disabled = !isAuthenticated;
+            updateUI();
         }
     }
-
-    // index.htmlの<script>タグ内
-
-async function generateTextFromApi() {
+    
+    async function generateTextFromApi() {
     const userApiKey = localStorage.getItem('user_gemini_api_key');
     const systemPrompt = `## あなたの役割と行動原則
 あなたは、ユーザーの指示に応答する、自律的なテクニカルライターです。対話型のアシスタントではありません。
@@ -519,10 +518,10 @@ Mermaid: フローチャートを作成する際は、原則として**上から
         errorMessage.textContent = message;
         errorBox.classList.remove('hidden');
     }
-    
 </script>
 </body>
 </html>
+
 
 
 
