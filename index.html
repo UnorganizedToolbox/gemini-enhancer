@@ -218,113 +218,112 @@
 }
     
     async function generateTextFromApi() {
-    const userApiKey = localStorage.getItem('user_gemini_api_key');
-    const systemPrompt = `## あなたの役割と行動原則
-あなたは、ユーザーの指示に応答する、自律的なテクニカルライターです。対話型のアシスタントではありません。
-ユーザーからの最初のプロンプトを、記事作成のための唯一かつ完全な指示として解釈してください。
-不明な点があっても、確認のための質問を返してはいけません。与えられた情報と、利用可能なツールを最大限活用し、必ず一度の応答で記事全体を完成させてください。
+        const userApiKey = localStorage.getItem('user_gemini_api_key');
 
-## 思考プロセス
-1.  まず、ユーザーの要求を分析し、自身の知識が古い、あるいは不足している可能性があるかを判断します。また、主観的評価に依らず、常に変動しうる情報についてはステップ２を必須とする。また、最新情報であることをユーザーから明示された場合も同様に必須とする。
-2.  もし情報が古い、あるいは不足していると判断した場合、必ず\`Google Search\`ツールを実行して、信頼できる最新の情報源を複数見つけ出します。
-3.　キーワードが過度に広範ないし狭小等の理由によって適切な結果が得られなかった場合、再度キーワードを修正し検索を行ってください。
-4.　考え得る全ての検索を行い、または5回行ったにもかかわらず十分な情報を得られなかった場合、その時点で追加検索を中止し、「検索したが発見できなかった」旨の記載を行うように。
-5.　出力を行う際に、損言葉のみによる説明では不十分だろうと判断した場合、ないしより理解できるだろうと判断した場合、どの部分にどのような図が必要であるかを、前ステップ以前を参考に考えてください。
-6.  得た情報などを統合し、ツールを用いながら最も分かりやすい記事を出力します。
-## 利用可能なツール
-- **google_search**: 最新の情報をWebから検索します。検索クエリを引数として渡します。
-Markdown: 構造化された文章を作成します。
-Mermaid: フローチャートや図を作成します。
-Mermaidの成功例...以下は完全なMermaidの例です。これを参考に、常に正確なコードを生成してください。
-LaTeX: 数式を表現します。
-## 出力に関する指示
-Mermaid: フローチャートを作成する際は、原則として**上から下へ（TDまたはTB）**のレイアウトを使用してください。ノードのテキストに特殊文字 () : を含む場合は、テキスト全体を "" で囲んでください。
-参考文献と資料:
-実際に参照したWebページや書籍のみを、解説の最後に「## 参考文献」セクションを設け、以下の記法に従ってリストアップしてください。リストアップする際、その資料ごとに改行してください。本文中の関連箇所には [1], [2] のように引用番号を付与してください。
-ウェブサイト: 著者名（任意）「記事タイトル」サイト名. <URL>. (閲覧日: {{YYYY-MM-DD}})
-書籍: 著者名『書籍名』出版社, 出版年.
-閲覧日が不明な場合は（閲覧日: 不明）のように記載してください。直接参照した情報源がない場合、参考文献セクションには「なし」とだけ記載してください。
-読者のさらなる学習のために推奨できる資料がある場合は、「## 参考資料」というセクションを参考文献の後に設け、リスト形式で提示してください。`;
+        if (!userApiKey) {
+            // --- 無料ユーザー（サーバー経由）の処理 ---
+            console.log("サーバー経由で実行します（回数制限・認証あり）");
+            if (!auth0Client) throw new Error("認証クライアントが初期化されていません。");
+            const isAuthenticated = await auth0Client.isAuthenticated();
+            if (!isAuthenticated) throw new Error("ログインが必要です。");
+            
+            const accessToken = await auth0Client.getTokenSilently();
 
-    if (!userApiKey) {
-        // --- 無料ユーザー（あなたのサーバー経由）の処理 ---
-        console.log("サーバー経由で実行します（回数制限・認証あり）");
-
-        if (!auth0Client) throw new Error("認証クライアントが初期化されていません。");
-        const isAuthenticated = await auth0Client.isAuthenticated();
-        if (!isAuthenticated) throw new Error("ログインが必要です。");
-        
-        const accessToken = await auth0Client.getTokenSilently();
-
-        const response = await fetch('/api/generate', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${accessToken}`
-            },
-            body: JSON.stringify({ 
-                chatHistory: chatHistory, // ★★★ 会話履歴をそのまま全て送る ★★★
-                systemPrompt: systemPrompt
-            }),
-        });
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || `サーバーエラー (${response.status})`);
-        }
-        const data = await response.json();
-        return data.text;
-
-    } else {
-        // --- BYOKユーザー（Google APIへ直接）の処理 ---
-        console.log("ユーザー提供のAPIキーを使用して直接実行します。");
-
-        const selectedModel = document.getElementById('model-select').value;
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${userApiKey}`;
-        
-        const payload = {
-            contents: chatHistory,
-            systemInstruction: {
-                parts: [{ text: systemPrompt }],
-            },
-            tools: [
-                {
-                    "google_search_retrieval": {}
-                }
-            ]
-        };
-
-        try {
-            const response = await fetch(apiUrl, {
+            const response = await fetch('/api/generate', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${accessToken}`
                 },
-                body: JSON.stringify(payload),
+                body: JSON.stringify({ chatHistory: chatHistory }), // systemPromptはサーバー側で定義
             });
-
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(`Google API エラー (${response.status}): ${errorData.error?.message || '不明なエラー'}`);
+                throw new Error(errorData.error || `サーバーエラー (${response.status})`);
             }
+            const data = await response.json();
+            return data.text;
 
-            const result = await response.json();
-            const modelResponseText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+        } else {
+            // ★★★ ここからがBYOKユーザー用の修正箇所 ★★★
+            console.log("ユーザー提供のAPIキーを使用して2エージェント構成で実行します。");
 
-            if (!modelResponseText) {
-                throw new Error("APIからの応答が予期した形式ではありません。");
+            const selectedModel = document.getElementById('model-select').value;
+            // gemini-2.5-proはツールをサポートしていないため、1.5-proに強制する
+            const researcherModelName = "gemini-1.5-pro-latest";
+            const writerModelName = selectedModel === "gemini-2.5-pro" ? "gemini-1.5-pro-latest" : selectedModel;
+            
+            const apiUrl = (modelName) => `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${userApiKey}`;
+
+            try {
+                // --- 1. エージェント1 (調査担当) の実行 ---
+                console.log("エージェント1 (調査担当) を実行中...");
+                const researcherSystemPrompt = `## あなたの役割\nあなたは「リサーチャー」です。ユーザーからの要求に基づき、Google検索ツールを徹底的に活用して、正確で包括的な情報を収集・整理することが唯一の任務です。\n\n## 行動原則\n- ユーザーの要求に関連する情報を、信頼できる情報源から複数収集します。\n- 収集した情報を、次の担当者が記事を執筆しやすいように、構造化された箇条書き形式で客観的に要約してください。\n- あなた自身が記事の本文を執筆したり、解説を加えたりする必要はありません。事実のリストアップに徹してください。\n- 図や表の作成は行いません。\n\n## 出力形式\n必ず以下のMarkdown形式で出力してください。\n\`\`\`markdown\n## 調査結果サマリ\n### トピック1\n- 重要な事実A\n- 重要な事実B\n### トピック2\n- 重要な事実C\n- 関連データD\n\`\`\``;
+                
+                const researcherPayload = {
+                    contents: chatHistory,
+                    systemInstruction: { parts: [{ text: researcherSystemPrompt }] },
+                    tools: [{ "googleSearchRetrieval": {} }]
+                };
+
+                const researcherResponse = await fetch(apiUrl(researcherModelName), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(researcherPayload),
+                });
+
+                if (!researcherResponse.ok) {
+                    const errorData = await researcherResponse.json();
+                    throw new Error(`[調査担当] Google API エラー (${researcherResponse.status}): ${errorData.error?.message || '不明なエラー'}`);
+                }
+                const researcherResult = await researcherResponse.json();
+                const researchSummary = researcherResult.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (!researchSummary) {
+                    throw new Error("[調査担当] APIからの応答が予期した形式ではありません。");
+                }
+                console.log("エージェント1 完了。調査結果:\n", researchSummary);
+                
+                // --- 2. エージェント2 (記事化担当) の実行 ---
+                console.log("エージェント2 (記事化担当) を実行中...");
+                const originalUserPrompt = chatHistory[chatHistory.length - 1].parts[0].text;
+                const writerSystemPrompt = `## あなたの役割\nあなたは「テクニカルライター兼イラストレーター」です。リサーチャーから提供された「調査結果サマリ」を元に、読者にとって最も理解しやすい解説記事を完成させることが唯一の任務です。\n\n## 行動原則\n- **与えられた「調査結果サマリ」の情報のみを信頼できる情報源とし、それ以外の知識やGoogle検索は絶対に使用しないでください。**\n- 文章による説明だけでは不十分だと判断した箇所では、**Mermaidを用いてフローチャートなどの図を積極的に作成してください。**\n- 数式や科学的表記が必要な場合は、**LaTeXを必ず使用してください。**\n- 最終的な出力は、一つの完成された記事として構成してください。\n\n## 出力に関する指示\n実際に参照したWebページや書籍のみを、解説の最後に「## 参考文献」セクションを設け、以下の記法に従ってリストアップしてください。本文中の関連箇所には [1], [2] のように引用番号を付与してください。\nウェブサイト: 著者名（任意）「記事タイトル」サイト名. <URL>. (閲覧日: {{YYYY-MM-DD}})\n書籍: 著者名『書籍名』出版社, 出版年.`;
+
+                const writerPrompt = `以下の【元の依頼】と【調査結果サマリ】に基づいて、指示通りに図表を多用した完成された解説記事を作成してください。\n\n【元の依頼】\n${originalUserPrompt}\n\n【調査結果サマリ】\n${researchSummary}`;
+
+                const writerPayload = {
+                    contents: [{ role: "user", parts: [{ text: writerPrompt }] }],
+                    systemInstruction: { parts: [{ text: writerSystemPrompt }] },
+                    // 記事化担当はツールを使用しない
+                };
+
+                const writerResponse = await fetch(apiUrl(writerModelName), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(writerPayload),
+                });
+
+                if (!writerResponse.ok) {
+                    const errorData = await writerResponse.json();
+                    throw new Error(`[記事化担当] Google API エラー (${writerResponse.status}): ${errorData.error?.message || '不明なエラー'}`);
+                }
+
+                const writerResult = await writerResponse.json();
+                const finalArticle = writerResult.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (!finalArticle) {
+                    throw new Error("[記事化担当] APIからの応答が予期した形式ではありません。");
+                }
+                return finalArticle;
+
+            } catch (error) {
+                console.error("Google API direct call error:", error);
+                if (error.message.includes(userApiKey)) {
+                    throw new Error("Google APIへの接続中にエラーが発生しました。APIキーが正しいか確認してください。");
+                }
+                throw error;
             }
-            return modelResponseText;
-
-        } catch (error) {
-            console.error("Google API direct call error:", error);
-            // エラーメッセージにAPIキーが含まれないように配慮
-            if (error.message.includes(userApiKey)) {
-                throw new Error("Google APIへの接続中にエラーが発生しました。APIキーが正しいか確認してください。");
-            }
-            throw error;
         }
     }
-}
 
     // --- 6. チャットUIのヘルパー関数群 ---
     function addMessageToHistory(role, content) {
@@ -519,6 +518,7 @@ Mermaid: フローチャートを作成する際は、原則として**上から
 </script>
 </body>
 </html>
+
 
 
 
