@@ -273,8 +273,7 @@ Mermaid: フローチャートを作成する際は、原則として**上から
                 'Authorization': `Bearer ${accessToken}`
             },
             body: JSON.stringify({ 
-                chatHistory: chatHistory.slice(0, -1), // 最後（ユーザーの入力）を除いた会話履歴
-                userPrompt: chatHistory[chatHistory.length - 1].parts[0].text, // ユーザーが最後に入力した内容
+                chatHistory: chatHistory, // ★★★ 会話履歴をそのまま全て送る ★★★
                 systemPrompt: systemPrompt
             }),
         });
@@ -525,6 +524,7 @@ Mermaid: フローチャートを作成する際は、原則として**上から
 </script>
 </body>
 </html>
+
 
 
 
