@@ -96,7 +96,7 @@ export default async function handler(req, res) {
       tools: tools,
     });
 
-    const chat = model.startChat({ history: chatHistory });
+    const chat = model.startChat({ history: chatHistory.slice(1) });
     const result = await chat.sendMessage(userPrompt);
     const response = result.response;
 
