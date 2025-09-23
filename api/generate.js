@@ -55,6 +55,9 @@ export default async function handler(req, res) {
     const model = genAI.getGenerativeModel({
       model: "gemini-1.5-pro-latest",
       systemInstruction: { parts: [{ text: systemPrompt }] },
+      tools: [
+        { "googleSearch": {} }
+      ],
     });
 
     // ★★★ 変更点：startChatを使わず、generateContentに会話履歴全体を渡す ★★★
