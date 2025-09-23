@@ -192,26 +192,30 @@
     generateBtn.addEventListener('click', generateContent);
 
     async function generateContent() {
-        const userPrompt = promptTextarea.value;
-        if (!userPrompt.trim()) return;
-        
-        addMessageToHistory('user', userPrompt);
-        promptTextarea.value = '';
-        generateBtn.disabled = true;
-        addTypingIndicator();
-        
-        try {
-            const markdownText = await generateTextFromApi();
-            removeTypingIndicator();
-            addMessageToHistory('model', markdownText);
-        } catch (error) {
-            console.error('Error:', error);
-            showError(error.message || '不明なエラーが発生しました。');
-            removeTypingIndicator();
-        } finally {
-            updateUI();
-        }
+    const userPrompt = promptTextarea.value;
+    if (!userPrompt.trim()) return;
+    
+    addMessageToHistory('user', userPrompt);
+    promptTextarea.value = '';
+    promptTextarea.style.height = 'auto'; // テキストエリアの高さをリセット
+
+    generateBtn.disabled = true;
+    addTypingIndicator();
+    
+    try {
+        const markdownText = await generateTextFromApi();
+        removeTypingIndicator();
+        addMessageToHistory('model', markdownText);
+    } catch (error) {
+        console.error('Error:', error);
+        showError(error.message || '不明なエラーが発生しました。');
+        removeTypingIndicator();
+    } finally {
+        // ★★★ 修正箇所 ★★★
+        // 常にUIの状態を正しくチェックしてボタンの有効/無効を決定する
+        updateUI(); 
     }
+}
     
     async function generateTextFromApi() {
     const userApiKey = localStorage.getItem('user_gemini_api_key');
@@ -521,6 +525,7 @@ Mermaid: フローチャートを作成する際は、原則として**上から
 </script>
 </body>
 </html>
+
 
 
 
