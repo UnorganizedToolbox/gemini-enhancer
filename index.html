@@ -297,6 +297,11 @@ Mermaid: フローチャートを作成する際は、原則として**上から
             systemInstruction: {
                 parts: [{ text: systemPrompt }],
             },
+            tools: [
+                {
+                    "google_search": {}
+                }
+            ]
         };
 
         try {
@@ -525,6 +530,7 @@ Mermaid: フローチャートを作成する際は、原則として**上から
 </script>
 </body>
 </html>
+
 
 
 
