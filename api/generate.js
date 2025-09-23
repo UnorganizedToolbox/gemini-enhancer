@@ -1,4 +1,4 @@
-// /api/generate.js (最終完成・修正版)
+// /api/generate.js (google_search_retrieval対応 最終完成版)
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@vercel/kv";
@@ -15,20 +15,15 @@ export default async function handler(req, res) {
   }
 
   try {
+    // ... (認証とレートリミットのロジックは変更なし) ...
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) return res.status(401).json({ error: '認証トークンが必要です。' });
-
     const jwks = jose.createRemoteJWKSet(new URL(`https://${process.env.AUTH0_DOMAIN}/.well-known/jwks.json`));
-    const { payload } = await jose.jwtVerify(token, jwks, {
-      issuer: `https://${process.env.AUTH0_DOMAIN}/`,
-      audience: process.env.AUTH0_AUDIENCE,
-    });
+    const { payload } = await jose.jwtVerify(token, jwks, { issuer: `https://${process.env.AUTH0_DOMAIN}/`, audience: process.env.AUTH0_AUDIENCE });
     const userId = payload.sub;
     if (!userId) return res.status(401).json({ error: '無効なトークンです。' });
-
     const ADMIN_USER_ID = process.env.ADMIN_USER_ID;
     const isAdmin = ADMIN_USER_ID && userId === ADMIN_USER_ID;
-
     if (!isAdmin) {
       const key = `ratelimit_${userId}`;
       const limit = 5;
@@ -44,9 +39,7 @@ export default async function handler(req, res) {
     }
 
     const { chatHistory, systemPrompt } = req.body;
-    if (!Array.isArray(chatHistory)) {
-        throw new Error("chatHistory must be an array.");
-    }
+    if (!Array.isArray(chatHistory)) throw new Error("chatHistory must be an array.");
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) throw new Error("APIキーが設定されていません。");
@@ -55,15 +48,13 @@ export default async function handler(req, res) {
     const model = genAI.getGenerativeModel({
       model: "gemini-1.5-pro-latest",
       systemInstruction: { parts: [{ text: systemPrompt }] },
-      tools: [
-        { "googleSearch": {} }
-      ],
     });
-
-    // ★★★ 変更点：startChatを使わず、generateContentに会話履歴全体を渡す ★★★
-    // これにより、フロントエンドからuserPromptを個別に受け取る必要がなくなります。
+    
+    // ★★★ 変更点 ★★★
+    // ツールをGeminiに組み込まれたGoogle検索機能に直接指定する
     const result = await model.generateContent({
-        contents: chatHistory, 
+        contents: chatHistory,
+        tools: [{ googleSearchRetrieval: {} }] 
     });
     
     const response = result.response;
@@ -73,7 +64,7 @@ export default async function handler(req, res) {
 
   } catch (error) {
     if (error instanceof jose.errors.JWTExpired) {
-      return res.status(401).json({ error: '認証トークンが期限切れです。再度ログインしてください。' });
+        return res.status(401).json({ error: '認証トークンが期限切れです。再度ログインしてください。' });
     }
     console.error('Error in API route:', error);
     res.status(500).json({ error: error.message || 'サーバーでエラーが発生しました。' });
