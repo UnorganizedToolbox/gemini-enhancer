@@ -522,23 +522,29 @@ Latex: 数式を表現します。
     const { jsPDF } = window.jspdf;
     const originalContent = document.querySelector(`#${elementId} .model-content`);
 
-    // ★★★ ここから追加 ★★★
-    // H1タグからタイトルを取得、なければデフォルト名
-    const titleElement = originalContent.querySelector('h1');
-    let pdfTitle = "gemini-export";
+    // ★★★ 修正点1: h1またはh2タグからタイトルを取得 ★★★
+    const titleElement = originalContent.querySelector('h1, h2');
+    let articleTitle = "生成された解説記事"; // PDFヘッダー用のタイトル
+    let pdfFilename = "gemini-export";   // ファイル名用のタイトル
+
     if (titleElement) {
-        // ファイル名として使えない文字を削除・置換
-        pdfTitle = titleElement.textContent.trim().replace(/[\\/:*?"<>|]/g, '_');
+        // 取得したテキストを両方の変数に格納
+        articleTitle = titleElement.textContent.trim();
+        // ファイル名として使えない文字を置換
+        pdfFilename = articleTitle.replace(/[\\/:*?"<>|]/g, '_');
     }
-    // ★★★ ここまで追加 ★★★
 
     const printableArea = document.createElement('div');
     printableArea.style.cssText = 'position:absolute; left:-9999px; width:1024px; padding:50px; background:#fff;';
     printableArea.className = 'prose max-w-none';
-    const headerHtml = `<div style="margin-bottom: 40px; border-bottom: 1px solid #ddd; padding-bottom: 20px;"><h1 style="font-size: 24px; margin: 0;">生成された解説記事</h1><p style="text-align: right; margin: 0; color: #555;">${new Date().toLocaleString('ja-JP')}</p></div>`;
+    
+    // ★★★ 修正点2: ヘッダーに動的なタイトルを埋め込む ★★★
+    const headerHtml = `<div style="margin-bottom: 40px; border-bottom: 1px solid #ddd; padding-bottom: 20px;"><h1 style="font-size: 24px; margin: 0;">${articleTitle}</h1><p style="text-align: right; margin: 0; color: #555;">${new Date().toLocaleString('ja-JP')}</p></div>`;
+
     const contentClone = originalContent.cloneNode(true);
     printableArea.innerHTML = headerHtml;
     printableArea.appendChild(contentClone);
+    
     document.body.appendChild(printableArea);
     const canvas = await html2canvas(printableArea, { scale: 2 });
     document.body.removeChild(printableArea);
@@ -551,8 +557,8 @@ Latex: 数式を表現します。
     });
     pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
 
-    // ★★★ ファイル名を動的に変更 ★★★
-    pdf.save(`${pdfTitle}.pdf`);
+    // ★★★ 修正点3: 修正されたファイル名を使用 ★★★
+    pdf.save(`${pdfFilename}.pdf`);
 }
     function showError(message) {
         errorMessage.textContent = message;
@@ -561,6 +567,7 @@ Latex: 数式を表現します。
 </script>
 </body>
 </html>
+
 
 
 
