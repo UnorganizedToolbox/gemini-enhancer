@@ -522,15 +522,12 @@ Latex: 数式を表現します。
     const { jsPDF } = window.jspdf;
     const originalContent = document.querySelector(`#${elementId} .model-content`);
 
-    // ★★★ 修正点1: h1またはh2タグからタイトルを取得 ★★★
     const titleElement = originalContent.querySelector('h1, h2');
-    let articleTitle = "生成された解説記事"; // PDFヘッダー用のタイトル
-    let pdfFilename = "gemini-export";   // ファイル名用のタイトル
+    let articleTitle = "生成された解説記事";
+    let pdfFilename = "gemini-export";
 
     if (titleElement) {
-        // 取得したテキストを両方の変数に格納
         articleTitle = titleElement.textContent.trim();
-        // ファイル名として使えない文字を置換
         pdfFilename = articleTitle.replace(/[\\/:*?"<>|]/g, '_');
     }
 
@@ -538,12 +535,19 @@ Latex: 数式を表現します。
     printableArea.style.cssText = 'position:absolute; left:-9999px; width:1024px; padding:50px; background:#fff;';
     printableArea.className = 'prose max-w-none';
     
-    // ★★★ 修正点2: ヘッダーに動的なタイトルを埋め込む ★★★
     const headerHtml = `<div style="margin-bottom: 40px; border-bottom: 1px solid #ddd; padding-bottom: 20px;"><h1 style="font-size: 24px; margin: 0;">${articleTitle}</h1><p style="text-align: right; margin: 0; color: #555;">${new Date().toLocaleString('ja-JP')}</p></div>`;
 
     const contentClone = originalContent.cloneNode(true);
+
+    // ★★★ 修正点 ★★★
+    // コピーしたコンテンツから、重複するタイトル要素(h1 or h2)を探して削除する
+    const clonedTitleElement = contentClone.querySelector('h1, h2');
+    if (clonedTitleElement) {
+        clonedTitleElement.remove();
+    }
+
     printableArea.innerHTML = headerHtml;
-    printableArea.appendChild(contentClone);
+    printableArea.appendChild(contentClone); // タイトルが削除された本文のコピーを追加
     
     document.body.appendChild(printableArea);
     const canvas = await html2canvas(printableArea, { scale: 2 });
@@ -557,7 +561,6 @@ Latex: 数式を表現します。
     });
     pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
 
-    // ★★★ 修正点3: 修正されたファイル名を使用 ★★★
     pdf.save(`${pdfFilename}.pdf`);
 }
     function showError(message) {
@@ -567,58 +570,3 @@ Latex: 数式を表現します。
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
