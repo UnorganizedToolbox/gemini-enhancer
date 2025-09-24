@@ -86,12 +86,12 @@ Mermaid: \`\`\`mermaid コードブロックで図を作成します。フロー
 \`\`\`mermaid
 graph LR
     %% 正しいサブグラフ構文: subgraph ID ["表示タイトル"]
-    subgraph domain ["始域 (Domain)"]
+    subgraph domain ["始域"]
         x1
         x2
         x3
     end
-    subgraph codomain ["終域 (Codomain)"]
+    subgraph codomain ["終域"]
         y1
         y2
         y3
