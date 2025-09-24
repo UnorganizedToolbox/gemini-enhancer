@@ -85,22 +85,20 @@ Mermaid: \`\`\`mermaid コードブロックで図を作成します。フロー
 ### 【完璧な構造の例】
 \`\`\`mermaid
 graph LR
-    %% まず、全てのグループ（サブグラフ）を定義します。
-    subgraph 始域 (Domain)
+    %% 正しいサブグラフ構文: subgraph ID ["表示タイトル"]
+    subgraph domain ["始域 (Domain)"]
         x1
         x2
         x3
     end
-    subgraph 終域 (Codomain)
+    subgraph codomain ["終域 (Codomain)"]
         y1
         y2
         y3
         y4
     end
 
-    %% ★★★ 構造のポイント ★★★
-    %% 全てのグループを定義し終えた後で、グループ間の接続を定義します。
-    %% これにより、グループが混ざることなく、関係性が明確になります。
+    %% グループ定義後に接続を記述
     x1 --> y1
     x2 --> y2
     x3 --> y3
