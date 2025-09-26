@@ -251,7 +251,7 @@
             const selectedModel = document.getElementById('model-select').value;
             // gemini-2.5-proはツールをサポートしていないため、1.5-proに強制する
             const researcherModelName = selectedModel;
-            const writerModelName = selectedModel === "gemini-2.5-pro" ? "gemini-1.5-pro-latest" : selectedModel;
+            const writerModelName = selectedModel;
             
             const apiUrl = (modelName) => `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${userApiKey}`;
 
@@ -571,6 +571,7 @@ Latex: 数式を表現します。
 </script>
 </body>
 </html>
+
 
 
 
