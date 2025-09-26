@@ -263,7 +263,7 @@
                 const researcherPayload = {
                     contents: chatHistory,
                     systemInstruction: { parts: [{ text: researcherSystemPrompt }] },
-                    tools: [{ "googleSearchRetrieval": {} }]
+                    tools: [{ "googleSearch": {} }]
                 };
 
                 const researcherResponse = await fetch(apiUrl(researcherModelName), {
@@ -571,6 +571,7 @@ Latex: 数式を表現します。
 </script>
 </body>
 </html>
+
 
 
 
