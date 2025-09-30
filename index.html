@@ -91,7 +91,9 @@
     </main>
 
     <script>
-        // --- 1. 要素の取得 ---
+        // --- 1. 要素の取得 ---        
+        const urlParams = new URLSearchParams(window.location.search);
+        const promptFromUrl = urlParams.get('prompt'); // 'prompt'という名前のパラメータの値を取得
         const loginBtn = document.getElementById('btn-login');
         const logoutBtn = document.getElementById('btn-logout');
         const generateBtn = document.getElementById('generate-btn');
@@ -135,6 +137,23 @@
                 showError("認証サービスの初期化に失敗。");
             } finally {
                 updateUI();
+                const urlParams = new URLSearchParams(window.location.search);
+                const promptFromUrl = urlParams.get('prompt');
+
+                if (promptFromUrl && promptFromUrl.trim() !== '') {
+                    // URLから取得したプロンプトをテキストエリアに設定
+                    const promptTextarea = document.getElementById('prompt');
+                    promptTextarea.value = decodeURIComponent(promptFromUrl);
+
+                    // UIが完全に準備されるのを少し待ってから自動的に生成を開始
+                    setTimeout(() => {
+                        const generateBtn = document.getElementById('generate-btn');
+                        // ボタンが押せる状態か確認してからクリック
+                        if (!generateBtn.disabled) {
+                            generateBtn.click();
+                        }
+                    }, 500); // 0.5秒の遅延
+                }
             }
         });
 
