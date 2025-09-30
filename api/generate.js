@@ -81,7 +81,7 @@ export default async function handler(req, res) {
         console.log("エージェント1 (調査担当) を実行中...");
         const researcherResult = await researcherModel.generateContent({
             contents: chatHistory,
-            tools: [{ googleSearchRetrieval: {} }]
+            tools: [{ googleSearch: {} }]
         });
         const researchSummary = researcherResult.response.text();
         console.log("エージェント1 完了。調査結果:\n", researchSummary);
