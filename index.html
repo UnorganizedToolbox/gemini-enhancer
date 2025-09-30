@@ -118,6 +118,8 @@
         const auth0Config = {
             domain: "dev-x55cpyrdwlq2c0p2.us.auth0.com",
             clientId: "gNGTdI71kRMz2xAzG0gGgTzbGZJKzqD8",
+            useRefreshTokens: true,
+            cacheLocation: 'localstorage',
             authorizationParams: {
                 redirect_uri: window.location.origin,
                 audience: "https://gemini-enhancer.vercel.app/api"
